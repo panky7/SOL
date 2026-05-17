@@ -102,3 +102,6 @@ async def startup_event():
 async def shutdown_db_client():
     from routes import client
     client.close()
+
+from mangum import Mangum
+handler = Mangum(app)
