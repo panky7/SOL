@@ -63,11 +63,12 @@ jobs:
         run: |
           cd backend
           mkdir -p build_dist
-          pip install --target build_dist -r requirements.txt
+          pip install --target build_dist -r requirements-prod.txt
           cp -r routes build_dist/
           cp server.py build_dist/
           cd build_dist
           zip -q -r ../lambda_function.zip .
+
 
       - name: 🔑 Configure AWS Credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
