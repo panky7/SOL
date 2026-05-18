@@ -370,9 +370,169 @@ resource "aws_iam_role_policy" "github_actions_policy" {
   })
 }
 
+resource "aws_iam_role_policy" "lambda_access" {
+  name = "SophieLamourLambdaAccessPolicy"
+  role = aws_iam_role.lambda_exec.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "dynamodb:PutItem",
+          "dynamodb:GetItem",
+          "dynamodb:UpdateItem",
+          "dynamodb:DeleteItem",
+          "dynamodb:Scan",
+          "dynamodb:Query",
+          "dynamodb:BatchWriteItem",
+          "dynamodb:BatchGetItem"
+        ]
+        Resource = [
+          "arn:aws:dynamodb:${var.aws_region}:464868388442:table/sophielamour-*",
+          "arn:aws:dynamodb:${var.aws_region}:464868388442:table/sophielamour-*/index/*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:PutObject",
+          "s3:GetObject",
+          "s3:DeleteObject",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          aws_s3_bucket.uploads.arn,
+          "${aws_s3_bucket.uploads.arn}/*"
+        ]
+      }
+    ]
+  })
+}
+
+# ==========================================
+# 📦 PRIVATE S3 UPLOADS BUCKET (5 GB FREE TIER)
+# ==========================================
+
+resource "aws_s3_bucket" "uploads" {
+  bucket        = "sophielamour-uploads"
+  force_destroy = true
+}
+
+resource "aws_s3_bucket_public_access_block" "uploads_privacy" {
+  bucket = aws_s3_bucket.uploads.id
+
+  block_public_acls       = false
+  block_public_policy     = false
+  ignore_public_acls      = false
+  restrict_public_buckets = false
+}
+
+resource "aws_s3_bucket_policy" "uploads_public_policy" {
+  bucket = aws_s3_bucket.uploads.id
+
+  depends_on = [aws_s3_bucket_public_access_block.uploads_privacy]
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "PublicReadGetObject"
+        Effect    = "Allow"
+        Principal = "*"
+        Action    = "s3:GetObject"
+        Resource  = "${aws_s3_bucket.uploads.arn}/*"
+      }
+    ]
+  })
+}
+
+# ==========================================
+# 📊 DYNAMODB TABLES (25 GB FREE FOREVER)
+# ==========================================
+
+resource "aws_dynamodb_table" "users" {
+  name         = "sophielamour-users"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "email"
+
+  attribute {
+    name = "email"
+    type = "S"
+  }
+}
+
+resource "aws_dynamodb_table" "blog_posts" {
+  name         = "sophielamour-blog-posts"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "id"
+
+  attribute {
+    name = "id"
+    type = "S"
+  }
+
+  attribute {
+    name = "slug"
+    type = "S"
+  }
+
+  global_secondary_index {
+    name            = "slug-index"
+    hash_key        = "slug"
+    projection_type = "ALL"
+  }
+}
+
+resource "aws_dynamodb_table" "testimonials" {
+  name         = "sophielamour-testimonials"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "id"
+
+  attribute {
+    name = "id"
+    type = "S"
+  }
+}
+
+resource "aws_dynamodb_table" "contact_requests" {
+  name         = "sophielamour-contact-requests"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "id"
+
+  attribute {
+    name = "id"
+    type = "S"
+  }
+}
+
+resource "aws_dynamodb_table" "uploads" {
+  name         = "sophielamour-uploads"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "file_id"
+
+  attribute {
+    name = "file_id"
+    type = "S"
+  }
+}
+
+resource "aws_dynamodb_table" "social_share_queue" {
+  name         = "sophielamour-social-share-queue"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "id"
+
+  attribute {
+    name = "id"
+    type = "S"
+  }
+}
+
 # ==========================================
 # 📊 OUTPUT VARIABLES FOR GITHUB SECRETS
 # ==========================================
+
 
 output "GITHUB_SECRET_AWS_ROLE_TO_ASSUME" {
   value       = aws_iam_role.github_actions.arn

@@ -46,27 +46,6 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup_event():
-    await db.users.create_index("email", unique=True)
-    await db.blog_posts.create_index("slug", unique=True)
-    await db.uploads.create_index("file_id", unique=True)
-
-    # Migrate any filesystem-based uploads to MongoDB
-    upload_dir = ROOT_DIR / "uploads"
-    if upload_dir.exists():
-        async for doc in db.uploads.find({"data": {"$exists": False}, "stored_name": {"$exists": True}}):
-            file_path = upload_dir / doc["stored_name"]
-            if file_path.exists():
-                try:
-                    file_data = file_path.read_bytes()
-                    update_fields = {"data": base64.b64encode(file_data).decode('utf-8')}
-                    if doc.get("is_image"):
-                        thumb_data = generate_thumbnail_bytes(file_data)
-                        if thumb_data:
-                            update_fields["thumbnail_data"] = base64.b64encode(thumb_data).decode('utf-8')
-                    await db.uploads.update_one({"file_id": doc["file_id"]}, {"$set": update_fields})
-                except Exception as e:
-                    logging.warning(f"Failed to migrate upload {doc['file_id']}: {e}")
-
     # Seed admin
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@sophielamour.com")
     admin_password = os.environ.get("ADMIN_PASSWORD", "SophieAdmin2025!")
@@ -75,6 +54,7 @@ async def startup_event():
     if existing is None:
         hashed = hash_password(admin_password)
         await db.users.insert_one({
+            "_id": "admin-user",
             "email": admin_email,
             "password_hash": hashed,
             "name": "Sophie Lamour",
@@ -98,10 +78,6 @@ async def startup_event():
         f.write(f"- GET /api/auth/me\n")
         f.write(f"- POST /api/auth/logout\n")
 
-@app.on_event("shutdown")
-async def shutdown_db_client():
-    from routes import client
-    client.close()
-
 from mangum import Mangum
 handler = Mangum(app)
+
