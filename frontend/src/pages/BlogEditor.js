@@ -27,13 +27,14 @@ const QuillEditor = ({ value, onChange, placeholder }) => {
 
   useEffect(() => {
     if (!containerRef.current || quillRef.current) return;
+    const container = containerRef.current;
 
     import('quill').then((mod) => {
       const Quill = mod.default;
-      if (!containerRef.current) return;
+      if (!container) return;
 
       const editorDiv = document.createElement('div');
-      containerRef.current.appendChild(editorDiv);
+      container.appendChild(editorDiv);
 
       const q = new Quill(editorDiv, {
         theme: 'snow',
@@ -114,10 +115,11 @@ const QuillEditor = ({ value, onChange, placeholder }) => {
 
     return () => {
       quillRef.current = null;
-      if (containerRef.current) {
-        containerRef.current.innerHTML = '';
+      if (container) {
+        container.innerHTML = '';
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -248,6 +250,7 @@ const BlogEditor = () => {
     if (isEditing) {
       fetchPost();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [postId]);
 
   const fetchPost = async () => {

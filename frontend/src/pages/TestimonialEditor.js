@@ -26,6 +26,7 @@ const TestimonialEditor = () => {
     if (isEditing) {
       fetchTestimonial();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [testimonialId]);
 
   const fetchTestimonial = async () => {
