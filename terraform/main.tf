@@ -154,6 +154,16 @@ resource "aws_lambda_function" "backend" {
   source_code_hash = data.archive_file.dummy_lambda.output_base64sha256
   timeout          = 30
   memory_size      = 256
+
+  environment {
+    variables = {
+      FRONTEND_URL   = "https://d27uzt73hvni4g.cloudfront.net,http://localhost:3000"
+      JWT_SECRET     = "supersecretjwtkey123_sophie_lamour_2026_prod"
+      ADMIN_EMAIL    = "admin@sophielamour.com"
+      ADMIN_PASSWORD = "SophieAdmin2025!"
+      MOCK_DB        = "false"
+    }
+  }
 }
 
 # ==========================================

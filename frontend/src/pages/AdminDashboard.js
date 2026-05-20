@@ -6,7 +6,7 @@ import { Helmet } from 'react-helmet-async';
 import axios from 'axios';
 import { Plus, Edit2, Trash2, LogOut, FileText, MessageSquare, Mail } from 'lucide-react';
 
-const API_URL = process.env.REACT_APP_BACKEND_URL;
+const API_URL = process.env.REACT_APP_BACKEND_URL || '';
 
 const AdminDashboard = () => {
   const { user, logout } = useAuth();

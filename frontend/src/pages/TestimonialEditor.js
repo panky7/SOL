@@ -4,7 +4,7 @@ import { Helmet } from 'react-helmet-async';
 import axios from 'axios';
 import { ArrowLeft } from 'lucide-react';
 
-const API_URL = process.env.REACT_APP_BACKEND_URL;
+const API_URL = process.env.REACT_APP_BACKEND_URL || '';
 
 const TestimonialEditor = () => {
   const navigate = useNavigate();

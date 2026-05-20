@@ -5,7 +5,7 @@ import axios from 'axios';
 import { ArrowLeft, Upload, X, Image as ImageIcon, Loader2 } from 'lucide-react';
 import 'react-quill-new/dist/quill.snow.css';
 
-const API_URL = process.env.REACT_APP_BACKEND_URL;
+const API_URL = process.env.REACT_APP_BACKEND_URL || '';
 
 const uploadFile = async (file) => {
   const formData = new FormData();

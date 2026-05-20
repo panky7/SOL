@@ -4,7 +4,7 @@ import { Helmet } from 'react-helmet-async';
 import axios from 'axios';
 import { Mail, Phone, MapPin, MessageCircle, Send } from 'lucide-react';
 
-const API_URL = process.env.REACT_APP_BACKEND_URL;
+const API_URL = process.env.REACT_APP_BACKEND_URL || '';
 
 const serviceOptions = [
   { id: 'personnel', label_fr: 'Accompagnement personnel', label_en: 'Personal Coaching' },

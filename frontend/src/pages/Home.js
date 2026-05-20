@@ -7,7 +7,7 @@ import axios from 'axios';
 import { Heart, Briefcase, Baby, Home as HomeIcon, Target, Palette, Smile, Leaf } from 'lucide-react';
 import useEmblaCarousel from 'embla-carousel-react';
 
-const API_URL = process.env.REACT_APP_BACKEND_URL;
+const API_URL = process.env.REACT_APP_BACKEND_URL || '';
 
 const Home = () => {
   const { t, language } = useLanguage();

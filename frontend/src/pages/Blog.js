@@ -4,7 +4,7 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { Helmet } from 'react-helmet-async';
 import axios from 'axios';
 
-const API_URL = process.env.REACT_APP_BACKEND_URL;
+const API_URL = process.env.REACT_APP_BACKEND_URL || '';
 
 const Blog = () => {
   const { t, language } = useLanguage();
