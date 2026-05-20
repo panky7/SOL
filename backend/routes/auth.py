@@ -22,7 +22,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
 
 def create_access_token(user_id: str, email: str) -> str:
-    payload = {"sub": user_id, "email": email, "exp": datetime.now(timezone.utc) + timedelta(minutes=15), "type": "access"}
+    payload = {"sub": user_id, "email": email, "exp": datetime.now(timezone.utc) + timedelta(hours=24), "type": "access"}
     return jwt.encode(payload, get_jwt_secret(), algorithm=JWT_ALGORITHM)
 
 def create_refresh_token(user_id: str) -> str:
@@ -73,7 +73,7 @@ async def login(credentials: LoginRequest, response: Response):
     access_token = create_access_token(str(user["_id"]), user["email"])
     refresh_token = create_refresh_token(str(user["_id"]))
     is_prod = os.environ.get("ENV") == "production"
-    response.set_cookie(key="access_token", value=access_token, httponly=True, secure=is_prod, samesite="lax" if not is_prod else "strict", max_age=900, path="/")
+    response.set_cookie(key="access_token", value=access_token, httponly=True, secure=is_prod, samesite="lax" if not is_prod else "strict", max_age=86400, path="/")
     response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, secure=is_prod, samesite="lax" if not is_prod else "strict", max_age=604800, path="/")
     return {"id": str(user["_id"]), "email": user["email"], "name": user["name"], "role": user["role"]}
 
