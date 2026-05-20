@@ -65,18 +65,21 @@ async def startup_event():
         await db.users.update_one({"email": admin_email}, {"$set": {"password_hash": hash_password(admin_password)}})
 
     # Write credentials
-    memory_dir = ROOT_DIR.parent / "memory"
-    memory_dir.mkdir(exist_ok=True)
-    with open(memory_dir / "test_credentials.md", "w") as f:
-        f.write(f"# Test Credentials\n\n")
-        f.write(f"## Admin Account\n")
-        f.write(f"- Email: {admin_email}\n")
-        f.write(f"- Password: {admin_password}\n")
-        f.write(f"- Role: admin\n\n")
-        f.write(f"## Auth Endpoints\n")
-        f.write(f"- POST /api/auth/login\n")
-        f.write(f"- GET /api/auth/me\n")
-        f.write(f"- POST /api/auth/logout\n")
+    try:
+        memory_dir = ROOT_DIR.parent / "memory"
+        memory_dir.mkdir(exist_ok=True)
+        with open(memory_dir / "test_credentials.md", "w") as f:
+            f.write(f"# Test Credentials\n\n")
+            f.write(f"## Admin Account\n")
+            f.write(f"- Email: {admin_email}\n")
+            f.write(f"- Password: {admin_password}\n")
+            f.write(f"- Role: admin\n\n")
+            f.write(f"## Auth Endpoints\n")
+            f.write(f"- POST /api/auth/login\n")
+            f.write(f"- GET /api/auth/me\n")
+            f.write(f"- POST /api/auth/logout\n")
+    except Exception as e:
+        logger.warning(f"Could not write credentials file (expected on read-only environments like AWS Lambda): {e}")
 
 from mangum import Mangum
 handler = Mangum(app)
