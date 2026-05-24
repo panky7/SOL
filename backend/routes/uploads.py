@@ -22,7 +22,9 @@ s3_client = None
 if not MOCK_DB:
     s3_client = boto3.client('s3', region_name=os.environ.get('AWS_REGION', 'eu-west-3'))
 
-UPLOADS_BUCKET = "sophielamour-uploads"
+ENVIRONMENT = os.environ.get('ENVIRONMENT', 'prod')
+env_suffix = f"-{ENVIRONMENT}" if ENVIRONMENT != 'prod' else ""
+UPLOADS_BUCKET = f"sophielamour-uploads{env_suffix}"
 
 def sanitize_filename(filename: str) -> str:
     name = Path(filename).name

@@ -47,11 +47,19 @@ provider "aws" {
   region = "us-east-1"
 }
 
+data "aws_caller_identity" "current" {}
+
+locals {
+  env        = terraform.workspace == "default" ? "prod" : terraform.workspace
+  env_suffix = local.env == "prod" ? "" : "-${local.env}"
+}
+
 # ==========================================
 # 🔒 SSL CERTIFICATE (ACM) IN US-EAST-1 FOR CLOUDFRONT
 # ==========================================
 
 resource "aws_acm_certificate" "cert" {
+  count             = local.env == "prod" ? 1 : 0
   provider          = aws.us_east_1
   domain_name       = "sophielamourcoaching.fr"
   validation_method = "DNS"
@@ -66,8 +74,9 @@ resource "aws_acm_certificate" "cert" {
 }
 
 resource "aws_acm_certificate_validation" "cert" {
+  count           = local.env == "prod" ? 1 : 0
   provider        = aws.us_east_1
-  certificate_arn = aws_acm_certificate.cert.arn
+  certificate_arn = aws_acm_certificate.cert[0].arn
 }
 
 # ==========================================
@@ -76,13 +85,14 @@ resource "aws_acm_certificate_validation" "cert" {
 
 # Attempt to create OIDC provider (wrapped in dynamic setup or simple creation)
 resource "aws_iam_openid_connect_provider" "github" {
+  count           = local.env == "prod" ? 1 : 0
   url             = "https://token.actions.githubusercontent.com"
   client_id_list  = ["sts.amazonaws.com"]
   thumbprint_list = ["6938fd4d98bab03faadb97b34396831e3780aea1", "1c58a3a8518e8759bf075b76b750d4f2df264fcd"]
 }
 
 resource "aws_iam_role" "github_actions" {
-  name        = "SophieLamourGitHubDeployRole"
+  name        = "SophieLamourGitHubDeployRole${local.env_suffix}"
   description = "IAM Role assumed by GitHub Actions to securely deploy the Sophie Lamour application"
 
   assume_role_policy = jsonencode({
@@ -91,7 +101,7 @@ resource "aws_iam_role" "github_actions" {
       {
         Effect = "Allow"
         Principal = {
-          Federated = aws_iam_openid_connect_provider.github.arn
+          Federated = local.env == "prod" ? aws_iam_openid_connect_provider.github[0].arn : "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/token.actions.githubusercontent.com"
         }
         Action = "sts:AssumeRoleWithWebIdentity"
         Condition = {
@@ -112,7 +122,7 @@ resource "aws_iam_role" "github_actions" {
 # ==========================================
 
 resource "aws_s3_bucket" "frontend" {
-  bucket        = "sophielamour-frontend"
+  bucket        = "sophielamour-frontend${local.env_suffix}"
   force_destroy = true
 }
 
@@ -130,7 +140,7 @@ resource "aws_s3_bucket_public_access_block" "frontend_privacy" {
 # ==========================================
 
 resource "aws_cloudfront_origin_access_control" "oac" {
-  name                              = "sophielamour-oac"
+  name                              = "sophielamour-oac${local.env_suffix}"
   description                       = "OAC to secure access to the frontend static S3 bucket"
   origin_access_control_origin_type = "s3"
   signing_behavior                  = "always"
@@ -152,7 +162,7 @@ data "archive_file" "dummy_lambda" {
 }
 
 resource "aws_iam_role" "lambda_exec" {
-  name = "SophieLamourLambdaExecRole"
+  name = "SophieLamourLambdaExecRole${local.env_suffix}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -174,7 +184,7 @@ resource "aws_iam_role_policy_attachment" "lambda_logs" {
 }
 
 resource "aws_lambda_function" "backend" {
-  function_name    = "sophielamour-backend"
+  function_name    = "sophielamour-backend${local.env_suffix}"
   role             = aws_iam_role.lambda_exec.arn
   handler          = "server.handler"
   runtime          = "python3.12"
@@ -185,11 +195,12 @@ resource "aws_lambda_function" "backend" {
 
   environment {
     variables = {
-      FRONTEND_URL   = "https://d27uzt73hvni4g.cloudfront.net,http://localhost:3000"
-      JWT_SECRET     = "supersecretjwtkey123_sophie_lamour_2026_prod"
+      FRONTEND_URL   = "https://${aws_cloudfront_distribution.cdn.domain_name},http://localhost:3000"
+      JWT_SECRET     = "supersecretjwtkey123_sophie_lamour_2026_${local.env}"
       ADMIN_EMAIL    = "admin@sophielamour.com"
       ADMIN_PASSWORD = "SophieAdmin2025!"
       MOCK_DB        = "false"
+      ENVIRONMENT    = local.env
     }
   }
 }
@@ -199,7 +210,7 @@ resource "aws_lambda_function" "backend" {
 # ==========================================
 
 resource "aws_apigatewayv2_api" "http_api" {
-  name          = "sophielamour-api-gateway"
+  name          = "sophielamour-api-gateway${local.env_suffix}"
   protocol_type = "HTTP"
   cors_configuration {
     allow_origins = ["*"]
@@ -213,10 +224,10 @@ resource "aws_apigatewayv2_integration" "lambda" {
   api_id           = aws_apigatewayv2_api.http_api.id
   integration_type = "AWS_PROXY"
 
-  connection_type      = "INTERNET"
-  description          = "FastAPI lambda backend integration"
-  integration_method   = "POST"
-  integration_uri      = aws_lambda_function.backend.arn
+  connection_type        = "INTERNET"
+  description            = "FastAPI lambda backend integration"
+  integration_method     = "POST"
+  integration_uri        = aws_lambda_function.backend.arn
   payload_format_version = "2.0"
 }
 
@@ -248,7 +259,7 @@ resource "aws_cloudfront_distribution" "cdn" {
   enabled             = true
   is_ipv6_enabled     = true
   default_root_object = "index.html"
-  aliases             = ["sophielamourcoaching.fr", "www.sophielamourcoaching.fr"]
+  aliases             = local.env == "prod" ? ["sophielamourcoaching.fr", "www.sophielamourcoaching.fr"] : []
 
   # Origin 1: Private S3 Frontend Bucket
   origin {
@@ -309,9 +320,10 @@ resource "aws_cloudfront_distribution" "cdn" {
   }
 
   viewer_certificate {
-    acm_certificate_arn      = aws_acm_certificate_validation.cert.certificate_arn
-    ssl_support_method       = "sni-only"
-    minimum_protocol_version = "TLSv1.2_2021"
+    acm_certificate_arn            = local.env == "prod" ? aws_acm_certificate_validation.cert[0].certificate_arn : null
+    ssl_support_method             = local.env == "prod" ? "sni-only" : null
+    minimum_protocol_version       = local.env == "prod" ? "TLSv1.2_2021" : "TLSv1"
+    cloudfront_default_certificate = local.env == "prod" ? false : true
   }
 
   # React SPA Routing Configuration: Redirect 404/403 back to index.html with 200 OK
@@ -341,8 +353,8 @@ resource "aws_s3_bucket_policy" "oac_access" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid       = "AllowCloudFrontServicePrincipalReadOnly"
-        Effect    = "Allow"
+        Sid    = "AllowCloudFrontServicePrincipalReadOnly"
+        Effect = "Allow"
         Principal = {
           Service = "cloudfront.amazonaws.com"
         }
@@ -363,7 +375,7 @@ resource "aws_s3_bucket_policy" "oac_access" {
 # ==========================================
 
 resource "aws_iam_role_policy" "github_actions_policy" {
-  name = "SophieLamourGitHubDeployPolicy"
+  name = "SophieLamourGitHubDeployPolicy${local.env_suffix}"
   role = aws_iam_role.github_actions.id
 
   policy = jsonencode({
@@ -404,7 +416,7 @@ resource "aws_iam_role_policy" "github_actions_policy" {
 }
 
 resource "aws_iam_role_policy" "lambda_access" {
-  name = "SophieLamourLambdaAccessPolicy"
+  name = "SophieLamourLambdaAccessPolicy${local.env_suffix}"
   role = aws_iam_role.lambda_exec.id
 
   policy = jsonencode({
@@ -449,7 +461,7 @@ resource "aws_iam_role_policy" "lambda_access" {
 # ==========================================
 
 resource "aws_s3_bucket" "uploads" {
-  bucket        = "sophielamour-uploads"
+  bucket        = "sophielamour-uploads${local.env_suffix}"
   force_destroy = true
 }
 
@@ -486,7 +498,7 @@ resource "aws_s3_bucket_policy" "uploads_public_policy" {
 # ==========================================
 
 resource "aws_dynamodb_table" "users" {
-  name           = "sophielamour-users"
+  name           = "sophielamour-users${local.env_suffix}"
   billing_mode   = "PROVISIONED"
   read_capacity  = 1
   write_capacity = 1
@@ -499,7 +511,7 @@ resource "aws_dynamodb_table" "users" {
 }
 
 resource "aws_dynamodb_table" "blog_posts" {
-  name           = "sophielamour-blog-posts"
+  name           = "sophielamour-blog-posts${local.env_suffix}"
   billing_mode   = "PROVISIONED"
   read_capacity  = 1
   write_capacity = 1
@@ -525,7 +537,7 @@ resource "aws_dynamodb_table" "blog_posts" {
 }
 
 resource "aws_dynamodb_table" "testimonials" {
-  name           = "sophielamour-testimonials"
+  name           = "sophielamour-testimonials${local.env_suffix}"
   billing_mode   = "PROVISIONED"
   read_capacity  = 1
   write_capacity = 1
@@ -538,7 +550,7 @@ resource "aws_dynamodb_table" "testimonials" {
 }
 
 resource "aws_dynamodb_table" "contact_requests" {
-  name           = "sophielamour-contact-requests"
+  name           = "sophielamour-contact-requests${local.env_suffix}"
   billing_mode   = "PROVISIONED"
   read_capacity  = 1
   write_capacity = 1
@@ -551,7 +563,7 @@ resource "aws_dynamodb_table" "contact_requests" {
 }
 
 resource "aws_dynamodb_table" "uploads" {
-  name           = "sophielamour-uploads"
+  name           = "sophielamour-uploads${local.env_suffix}"
   billing_mode   = "PROVISIONED"
   read_capacity  = 1
   write_capacity = 1
@@ -564,7 +576,7 @@ resource "aws_dynamodb_table" "uploads" {
 }
 
 resource "aws_dynamodb_table" "social_share_queue" {
-  name           = "sophielamour-social-share-queue"
+  name           = "sophielamour-social-share-queue${local.env_suffix}"
   billing_mode   = "PROVISIONED"
   read_capacity  = 1
   write_capacity = 1
@@ -581,7 +593,7 @@ resource "aws_dynamodb_table" "social_share_queue" {
 # ==========================================
 
 resource "aws_cloudwatch_event_rule" "keep_warm" {
-  name                = "sophielamour-keep-warm-rule"
+  name                = "sophielamour-keep-warm-rule${local.env_suffix}"
   description         = "Pings the backend Lambda function every 5 minutes to prevent cold starts"
   schedule_expression = "rate(5 minutes)"
 }
@@ -590,11 +602,11 @@ resource "aws_cloudwatch_event_target" "keep_warm_target" {
   rule      = aws_cloudwatch_event_rule.keep_warm.name
   target_id = "KeepLambdaWarm"
   arn       = aws_lambda_function.backend.arn
-  input     = jsonencode({
-    "detail-type": "Scheduled Event",
-    "source": "aws.events",
-    "resources": [],
-    "detail": {}
+  input = jsonencode({
+    "detail-type" : "Scheduled Event",
+    "source" : "aws.events",
+    "resources" : [],
+    "detail" : {}
   })
 }
 
@@ -642,12 +654,12 @@ output "CLOUDFRONT_DOMAIN_NAME" {
 }
 
 output "ACM_DNS_VALIDATION_RECORDS" {
-  value = [
-    for dvo in aws_acm_certificate.cert.domain_validation_options : {
+  value = local.env == "prod" ? [
+    for dvo in aws_acm_certificate.cert[0].domain_validation_options : {
       domain_name = dvo.domain_name
       cname_name  = dvo.resource_record_name
       cname_value = dvo.resource_record_value
     }
-  ]
+  ] : []
   description = "Create these CNAME records in IONOS to validate your SSL certificate."
 }

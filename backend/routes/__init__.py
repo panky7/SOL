@@ -260,6 +260,8 @@ class DynamoTable:
 
 class Database:
     def __init__(self):
+        env = os.environ.get('ENVIRONMENT', 'prod')
+        env_suffix = f"-{env}" if env != 'prod' else ""
         if MOCK_DB:
             self.users = MockTable("sophielamour-users")
             self.blog_posts = MockTable("sophielamour-blog-posts")
@@ -268,11 +270,11 @@ class Database:
             self.uploads = MockTable("sophielamour-uploads")
             self.social_share_queue = MockTable("sophielamour-social-share-queue")
         else:
-            self.users = DynamoTable("sophielamour-users", "email")
-            self.blog_posts = DynamoTable("sophielamour-blog-posts", "id")
-            self.testimonials = DynamoTable("sophielamour-testimonials", "id")
-            self.contact_requests = DynamoTable("sophielamour-contact-requests", "id")
-            self.uploads = DynamoTable("sophielamour-uploads", "file_id")
-            self.social_share_queue = DynamoTable("sophielamour-social-share-queue", "id")
+            self.users = DynamoTable(f"sophielamour-users{env_suffix}", "email")
+            self.blog_posts = DynamoTable(f"sophielamour-blog-posts{env_suffix}", "id")
+            self.testimonials = DynamoTable(f"sophielamour-testimonials{env_suffix}", "id")
+            self.contact_requests = DynamoTable(f"sophielamour-contact-requests{env_suffix}", "id")
+            self.uploads = DynamoTable(f"sophielamour-uploads{env_suffix}", "file_id")
+            self.social_share_queue = DynamoTable(f"sophielamour-social-share-queue{env_suffix}", "id")
 
 db = Database()

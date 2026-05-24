@@ -16,6 +16,7 @@ class TestimonialCreate(BaseModel):
     text_en: str
     rating: int = Field(ge=1, le=5)
     photo: Optional[str] = None
+    source: Optional[str] = "local"
 
 class TestimonialUpdate(BaseModel):
     name: Optional[str] = None
@@ -23,12 +24,13 @@ class TestimonialUpdate(BaseModel):
     text_en: Optional[str] = None
     rating: Optional[int] = Field(default=None, ge=1, le=5)
     photo: Optional[str] = None
+    source: Optional[str] = None
 
 
 @router.get("")
 async def get_testimonials():
     testimonials = await db.testimonials.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
-    return testimonials
+    return [t for t in testimonials if t.get("id") != "settings_facebook_posts"]
 
 @router.post("", dependencies=[Depends(get_current_user)])
 async def create_testimonial(testimonial: TestimonialCreate, request: Request):
@@ -63,3 +65,42 @@ async def delete_testimonial(testimonial_id: str, request: Request):
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Testimonial not found")
     return {"message": "Testimonial deleted successfully"}
+
+
+class FacebookSettings(BaseModel):
+    feed_style: str = "juicer"
+    juicer_feed_id: Optional[str] = "sophielamourcoaching"
+    post_url_1: Optional[str] = ""
+    post_url_2: Optional[str] = ""
+    post_url_3: Optional[str] = ""
+
+
+@router.get("/settings/facebook")
+async def get_facebook_settings():
+    settings = await db.testimonials.find_one({"id": "settings_facebook_posts"})
+    if not settings:
+        return {
+            "feed_style": "juicer",
+            "juicer_feed_id": "sophielamourcoaching",
+            "post_url_1": "",
+            "post_url_2": "",
+            "post_url_3": ""
+        }
+    settings.pop("_id", None)
+    return settings
+
+
+@router.put("/settings/facebook", dependencies=[Depends(get_current_user)])
+async def update_facebook_settings(settings: FacebookSettings, request: Request):
+    user = await get_current_user(request)
+    if user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Not authorized")
+    settings_dict = settings.model_dump()
+    settings_dict["id"] = "settings_facebook_posts"
+    existing = await db.testimonials.find_one({"id": "settings_facebook_posts"})
+    if not existing:
+        await db.testimonials.insert_one(settings_dict)
+    else:
+        await db.testimonials.update_one({"id": "settings_facebook_posts"}, {"$set": settings_dict})
+    settings_dict.pop("_id", None)
+    return settings_dict

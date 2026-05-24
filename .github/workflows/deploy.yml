@@ -4,14 +4,55 @@ on:
   push:
     branches:
       - main
+      - dev
 
 permissions:
   id-token: write   # Required for requesting the JWT OIDC token
   contents: read    # Required for actions/checkout
 
 jobs:
+  decide-env:
+    name: 🔍 Determine Target Environment
+    runs-on: ubuntu-latest
+    outputs:
+      env_name: ${{ steps.decide.outputs.env_name }}
+      role_arn: ${{ steps.decide.outputs.role_arn }}
+      s3_bucket: ${{ steps.decide.outputs.s3_bucket }}
+      cloudfront_id: ${{ steps.decide.outputs.cloudfront_id }}
+      lambda_name: ${{ steps.decide.outputs.lambda_name }}
+    steps:
+      - id: decide
+        run: |
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "env_name=production" >> $GITHUB_OUTPUT
+            echo "role_arn=${{ secrets.AWS_ROLE_TO_ASSUME }}" >> $GITHUB_OUTPUT
+            echo "s3_bucket=${{ secrets.AWS_S3_BUCKET_NAME }}" >> $GITHUB_OUTPUT
+            echo "cloudfront_id=${{ secrets.AWS_CLOUDFRONT_DISTRIBUTION_ID }}" >> $GITHUB_OUTPUT
+            echo "lambda_name=${{ secrets.AWS_LAMBDA_FUNCTION_NAME }}" >> $GITHUB_OUTPUT
+          else
+            echo "env_name=development" >> $GITHUB_OUTPUT
+            
+            # Retrieve secrets. If dev secret is empty, fall back to production secret name.
+            role_arn="${{ secrets.AWS_ROLE_TO_ASSUME_DEV }}"
+            if [ -z "$role_arn" ]; then role_arn="${{ secrets.AWS_ROLE_TO_ASSUME }}"; fi
+            echo "role_arn=$role_arn" >> $GITHUB_OUTPUT
+            
+            s3_bucket="${{ secrets.AWS_S3_BUCKET_NAME_DEV }}"
+            if [ -z "$s3_bucket" ]; then s3_bucket="${{ secrets.AWS_S3_BUCKET_NAME }}"; fi
+            echo "s3_bucket=$s3_bucket" >> $GITHUB_OUTPUT
+            
+            cloudfront_id="${{ secrets.AWS_CLOUDFRONT_DISTRIBUTION_ID_DEV }}"
+            if [ -z "$cloudfront_id" ]; then cloudfront_id="${{ secrets.AWS_CLOUDFRONT_DISTRIBUTION_ID }}"; fi
+            echo "cloudfront_id=$cloudfront_id" >> $GITHUB_OUTPUT
+            
+            lambda_name="${{ secrets.AWS_LAMBDA_FUNCTION_NAME_DEV }}"
+            if [ -z "$lambda_name" ]; then lambda_name="${{ secrets.AWS_LAMBDA_FUNCTION_NAME }}"; fi
+            echo "lambda_name=$lambda_name" >> $GITHUB_OUTPUT
+          fi
+
   deploy-frontend:
     name: 🎨 Build and Deploy Frontend
+    needs: decide-env
     runs-on: ubuntu-latest
     steps:
       - name: 📂 Checkout Code
@@ -32,24 +73,23 @@ jobs:
           npm ci --legacy-peer-deps
           CI=false npm run build
 
-
-
       - name: 🔑 Configure AWS Credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          role-to-assume: ${{ needs.decide-env.outputs.role_arn }}
+          aws-region: ${{ secrets.AWS_REGION || 'eu-west-3' }}
 
       - name: 🚀 Deploy Frontend to Private S3
         run: |
-          aws s3 sync frontend/build/ s3://${{ secrets.AWS_S3_BUCKET_NAME }} --delete
+          aws s3 sync frontend/build/ s3://${{ needs.decide-env.outputs.s3_bucket }} --delete
 
       - name: ⚡ Invalidate CloudFront Cache
         run: |
-          aws cloudfront create-invalidation --distribution-id ${{ secrets.AWS_CLOUDFRONT_DISTRIBUTION_ID }} --paths "/*"
+          aws cloudfront create-invalidation --distribution-id ${{ needs.decide-env.outputs.cloudfront_id }} --paths "/*"
 
   deploy-backend:
     name: 🐍 Build and Deploy Serverless Backend
+    needs: decide-env
     runs-on: ubuntu-latest
     steps:
       - name: 📂 Checkout Code
@@ -71,13 +111,12 @@ jobs:
           cd build_dist
           zip -q -r ../lambda_function.zip .
 
-
       - name: 🔑 Configure AWS Credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          role-to-assume: ${{ needs.decide-env.outputs.role_arn }}
+          aws-region: ${{ secrets.AWS_REGION || 'eu-west-3' }}
 
       - name: 🚀 Deploy Backend to AWS Lambda
         run: |
-          aws lambda update-function-code --function-name ${{ secrets.AWS_LAMBDA_FUNCTION_NAME }} --zip-file fileb://backend/lambda_function.zip
+          aws lambda update-function-code --function-name ${{ needs.decide-env.outputs.lambda_name }} --zip-file fileb://backend/lambda_function.zip

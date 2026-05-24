@@ -13,12 +13,58 @@ const Home = () => {
   const { t, language } = useLanguage();
   const [testimonials, setTestimonials] = useState([]);
   const [blogPosts, setBlogPosts] = useState([]);
+  const [fbSettings, setFbSettings] = useState({
+    feed_style: 'juicer',
+    juicer_feed_id: 'sophielamourcoaching',
+    post_url_1: '',
+    post_url_2: '',
+    post_url_3: ''
+  });
   const [emblaRef] = useEmblaCarousel({ loop: true });
 
   useEffect(() => {
     fetchTestimonials();
     fetchBlogPosts();
+    fetchFbSettings();
   }, []);
+
+  const fetchFbSettings = async () => {
+    try {
+      const { data } = await axios.get(`${API_URL}/api/testimonials/settings/facebook`);
+      setFbSettings(data);
+    } catch (error) {
+      console.error('Error fetching FB settings:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (window.FB) {
+      try {
+        window.FB.XFBML.parse();
+      } catch (e) {
+        console.error("Failed to parse FB XFBML", e);
+      }
+    }
+  }, [fbSettings]);
+
+  useEffect(() => {
+    if (window.Juicer) {
+      try {
+        window.Juicer.initialize();
+      } catch (e) {
+        console.error("Failed to initialize Juicer", e);
+      }
+    }
+    return () => {
+      if (window.Juicer) {
+        try {
+          window.Juicer.remove();
+        } catch (e) {
+          console.error("Failed to remove Juicer", e);
+        }
+      }
+    };
+  }, [fbSettings.juicer_feed_id]);
 
   const fetchTestimonials = async () => {
     try {
@@ -251,21 +297,60 @@ const Home = () => {
             <div className="flex">
               {testimonials.map((testimonial, idx) => (
                 <div key={idx} className="flex-[0_0_100%] md:flex-[0_0_50%] lg:flex-[0_0_33.333%] px-4">
-                  <div className="bg-white rounded-3xl p-8 shadow-[0_8px_32px_rgba(44,44,42,0.04)]">
-                    <div className="text-5xl font-serif text-[#0077B6] mb-4">{"\u00AB"}</div>
-                    <p className="text-base leading-relaxed text-[#023E8A] mb-6">
-                      {language === 'fr' ? testimonial.text_fr : testimonial.text_en}
-                    </p>
-                    <div className="flex items-center gap-1 mb-4">
-                      {[...Array(testimonial.rating)].map((_, i) => (
-                        <span key={i} className="text-[#0077B6] text-xl">{"\u2605"}</span>
-                      ))}
+                  <div className="bg-white rounded-3xl p-8 shadow-[0_8px_32px_rgba(44,44,42,0.04)] flex flex-col h-full justify-between">
+                    <div>
+                      <div className="flex justify-between items-start mb-4">
+                        <div className="text-5xl font-serif text-[#0077B6] leading-none">{"\u00AB"}</div>
+                        {testimonial.source === 'google' && (
+                          <div className="flex items-center bg-[#F8F9FA] border border-[#DADCE0] rounded-full px-3 py-1 text-xs text-[#5F6368] font-medium font-sans">
+                            <svg className="w-3.5 h-3.5 mr-1.5" viewBox="0 0 24 24">
+                              <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v3.92h6.69a5.74 5.74 0 0 1-2.49 3.77v3.1h4.01c2.34-2.16 3.69-5.33 3.69-8.72z"/>
+                              <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-4.01-3.1c-1.12.75-2.55 1.19-3.92 1.19-3.02 0-5.58-2.04-6.5-4.77H1.38v3.2A11.98 11.98 0 0 0 12 24z"/>
+                              <path fill="#FBBC05" d="M5.5 14.41A7.12 7.12 0 0 1 5 12c0-.85.15-1.68.41-2.41V6.39H1.38A11.99 11.99 0 0 0 0 12c0 2.07.53 4.02 1.38 5.81l4.12-3.4z"/>
+                              <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.32 0 3.3 2.69 1.38 6.39l4.12 3.41c.92-2.73 3.48-4.77 6.5-4.77z"/>
+                            </svg>
+                            {t("Avis Google", "Google Review")}
+                          </div>
+                        )}
+                      </div>
+                      <p className="text-base leading-relaxed text-[#023E8A] mb-6">
+                        {language === 'fr' ? testimonial.text_fr : testimonial.text_en}
+                      </p>
                     </div>
-                    <p className="font-semibold text-[#03045E]">{testimonial.name}</p>
+                    <div>
+                      <div className="flex items-center gap-1 mb-4">
+                        {[...Array(testimonial.rating)].map((_, i) => (
+                          <span key={i} className="text-[#0077B6] text-xl">{"\u2605"}</span>
+                        ))}
+                      </div>
+                      <p className="font-semibold text-[#03045E]">{testimonial.name}</p>
+                    </div>
                   </div>
                 </div>
               ))}
             </div>
+          </div>
+          <div className="flex flex-col sm:flex-row justify-center items-center gap-4 mt-12">
+            <a
+              href="https://share.google/fcIZVyu8Zu9Vyf9Kh"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 bg-white border border-[#DADCE0] hover:bg-[#F8F9FA] text-[#3C4043] rounded-full px-6 py-3.5 transition-all duration-300 font-medium tracking-wide shadow-sm hover:shadow-md font-sans text-sm"
+            >
+              <svg className="w-5 h-5" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v3.92h6.69a5.74 5.74 0 0 1-2.49 3.77v3.1h4.01c2.34-2.16 3.69-5.33 3.69-8.72z"/>
+                <path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-4.01-3.1c-1.12.75-2.55 1.19-3.92 1.19-3.02 0-5.58-2.04-6.5-4.77H1.38v3.2A11.98 11.98 0 0 0 12 24z"/>
+                <path fill="#FBBC05" d="M5.5 14.41A7.12 7.12 0 0 1 5 12c0-.85.15-1.68.41-2.41V6.39H1.38A11.99 11.99 0 0 0 0 12c0 2.07.53 4.02 1.38 5.81l4.12-3.4z"/>
+                <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.32 0 3.3 2.69 1.38 6.39l4.12 3.41c.92-2.73 3.48-4.77 6.5-4.77z"/>
+              </svg>
+              {t("Laisser un avis sur Google", "Write a Google Review")}
+            </a>
+            <Link
+              to="/temoignages"
+              className="inline-block bg-[#0077B6] hover:bg-[#023E8A] text-white rounded-full px-6 py-3.5 transition-all duration-300 font-medium tracking-wide shadow-sm hover:shadow-md text-sm"
+            >
+              {t("Voir tous les témoignages", "View all testimonials")}
+            </Link>
           </div>
         </section>
       )}
@@ -308,6 +393,115 @@ const Home = () => {
           </div>
         </section>
       )}
+
+      {/* Facebook/Social Feed Section */}
+      <section className="py-24 lg:py-32 px-6 md:px-12 lg:px-24 bg-[#CAF0F8]/20" data-testid="facebook-feed-section">
+        <div className="text-center mb-16">
+          <h2 className="text-3xl sm:text-4xl lg:text-5xl tracking-tight leading-snug font-serif text-[#03045E] mb-4">
+            {t("Actualités & Partages", "News & Inspiration")}
+          </h2>
+          <p className="text-base lg:text-lg leading-relaxed text-[#023E8A] font-sans max-w-2xl mx-auto">
+            {t(
+              "Retrouvez mes dernières publications et réflexions partagées sur les réseaux.",
+              "Discover my latest posts and reflections shared on social media."
+            )}
+          </p>
+        </div>
+
+        <div className="max-w-6xl mx-auto">
+          {fbSettings.feed_style === 'juicer' && (
+            <div className="bg-white rounded-3xl p-8 border border-[#ADE8F4] shadow-[0_8px_32px_rgba(44,44,42,0.04)] overflow-hidden">
+              <ul 
+                key={fbSettings.juicer_feed_id} 
+                className="juicer-feed" 
+                data-feed-id={fbSettings.juicer_feed_id} 
+                data-per="3" 
+                data-columns="3"
+                data-truncate="150"
+              >
+                <h3 className="fb-xfbml-parse-ignore text-center text-[#023E8A] py-6 font-sans">
+                  <a 
+                    href={`https://www.juicer.io/feeds/${fbSettings.juicer_feed_id}`} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="underline hover:text-[#0077B6] transition-colors font-medium"
+                  >
+                    {t("Voir mes publications sur Facebook", "View my posts on Facebook")}
+                  </a>
+                </h3>
+              </ul>
+            </div>
+          )}
+
+          {fbSettings.feed_style === 'timeline' && (
+            <div className="flex justify-center">
+              <div className="w-full max-w-[500px] bg-white rounded-3xl p-6 border border-[#ADE8F4] shadow-[0_8px_32px_rgba(44,44,42,0.04)] overflow-hidden flex justify-center">
+                <div
+                  className="fb-page"
+                  data-href="https://www.facebook.com/61576060076125"
+                  data-tabs="timeline"
+                  data-width="500"
+                  data-height="600"
+                  data-small-header="false"
+                  data-adapt-container-width="true"
+                  data-hide-cover="false"
+                  data-show-facepile="true"
+                >
+                  <blockquote cite="https://www.facebook.com/61576060076125" className="fb-xfbml-parse-ignore">
+                    <a href="https://www.facebook.com/61576060076125">Sophie Lamour Coaching</a>
+                  </blockquote>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {fbSettings.feed_style === 'cards' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[fbSettings.post_url_1, fbSettings.post_url_2, fbSettings.post_url_3].map((url, index) => (
+                url ? (
+                  <div key={index} className="bg-white rounded-3xl p-4 border border-[#ADE8F4] shadow-[0_8px_32px_rgba(44,44,42,0.04)] overflow-hidden flex justify-center min-h-[400px]">
+                    <div 
+                      className="fb-post" 
+                      data-href={url} 
+                      data-width="auto"
+                      data-show-text="true"
+                    >
+                      <blockquote cite={url} className="fb-xfbml-parse-ignore">
+                        <a href={url}>{t("Voir la publication sur Facebook", "View post on Facebook")}</a>
+                      </blockquote>
+                    </div>
+                  </div>
+                ) : (
+                  <div key={index} className="bg-white rounded-3xl p-8 border border-[#ADE8F4] shadow-[0_8px_32px_rgba(44,44,42,0.04)] flex flex-col justify-between min-h-[300px]">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-10 h-10 rounded-full bg-[#0077B6]/10 flex items-center justify-center">
+                        <span className="font-bold text-[#0077B6] font-sans">S</span>
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-[#03045E] font-sans text-sm">Sophie Lamour</h4>
+                        <p className="text-xs text-[#023E8A]/60 font-sans">Publication Facebook</p>
+                      </div>
+                    </div>
+                    <p className="text-sm leading-relaxed text-[#023E8A] font-sans mb-6">
+                      {index === 0 && t("Découvrez mes conseils et partages pour retrouver votre équilibre intérieur.", "Discover my tips and insights to find your inner balance.")}
+                      {index === 1 && t("Rejoignez nos prochains ateliers collectifs pour vivre un moment de partage et de convivialité.", "Join our next group workshops to experience a moment of sharing and connection.")}
+                      {index === 2 && t("Libérez votre joie de vivre au quotidien grâce à nos séances de Yoga du Rire !", "Release your joy of living daily with our Laughter Yoga sessions!")}
+                    </p>
+                    <a 
+                      href="https://www.facebook.com/61576060076125" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-[#0077B6] hover:text-[#023E8A] text-sm font-semibold tracking-wider uppercase font-sans mt-auto"
+                    >
+                      {t("Consulter la page", "View Page")} &rarr;
+                    </a>
+                  </div>
+                )
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
 
       {/* CTA Banner */}
       <section className="py-24 px-6 md:px-12 lg:px-24 bg-[#0077B6]" data-testid="cta-banner">

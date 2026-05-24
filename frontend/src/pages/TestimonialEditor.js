@@ -16,7 +16,8 @@ const TestimonialEditor = () => {
     text_fr: '',
     text_en: '',
     rating: 5,
-    photo: ''
+    photo: '',
+    source: 'local'
   });
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
@@ -40,7 +41,8 @@ const TestimonialEditor = () => {
           text_fr: testimonial.text_fr || '',
           text_en: testimonial.text_en || '',
           rating: testimonial.rating || 5,
-          photo: testimonial.photo || ''
+          photo: testimonial.photo || '',
+          source: testimonial.source || 'local'
         });
       } else {
         setError("Temoignage non trouve");
@@ -145,7 +147,7 @@ const TestimonialEditor = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div>
                   <label className="block text-sm font-medium text-[#03045E] mb-2">Evaluation *</label>
                   <select
@@ -161,6 +163,20 @@ const TestimonialEditor = () => {
                     <option value={3}>3 etoiles</option>
                     <option value={2}>2 etoiles</option>
                     <option value={1}>1 etoile</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[#03045E] mb-2">Source *</label>
+                  <select
+                    name="source"
+                    value={formData.source}
+                    onChange={handleChange}
+                    required
+                    data-testid="testimonial-source-select"
+                    className="w-full px-4 py-3 rounded-xl border border-[#ADE8F4] focus:outline-none focus:border-[#0077B6] transition-colors"
+                  >
+                    <option value="local">Témoignage direct (Site)</option>
+                    <option value="google">Avis Google (Google Reviews)</option>
                   </select>
                 </div>
                 <div>
