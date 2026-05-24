@@ -42,6 +42,34 @@ provider "aws" {
   region = var.aws_region
 }
 
+provider "aws" {
+  alias  = "us_east_1"
+  region = "us-east-1"
+}
+
+# ==========================================
+# 🔒 SSL CERTIFICATE (ACM) IN US-EAST-1 FOR CLOUDFRONT
+# ==========================================
+
+resource "aws_acm_certificate" "cert" {
+  provider          = aws.us_east_1
+  domain_name       = "sophielamourcoaching.fr"
+  validation_method = "DNS"
+
+  subject_alternative_names = [
+    "www.sophielamourcoaching.fr"
+  ]
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+resource "aws_acm_certificate_validation" "cert" {
+  provider        = aws.us_east_1
+  certificate_arn = aws_acm_certificate.cert.arn
+}
+
 # ==========================================
 # 🔐 GITHUB OIDC IDENTITY PROVIDER & IAM ROLE
 # ==========================================
@@ -220,6 +248,7 @@ resource "aws_cloudfront_distribution" "cdn" {
   enabled             = true
   is_ipv6_enabled     = true
   default_root_object = "index.html"
+  aliases             = ["sophielamourcoaching.fr", "www.sophielamourcoaching.fr"]
 
   # Origin 1: Private S3 Frontend Bucket
   origin {
@@ -280,7 +309,9 @@ resource "aws_cloudfront_distribution" "cdn" {
   }
 
   viewer_certificate {
-    cloudfront_default_certificate = true
+    acm_certificate_arn      = aws_acm_certificate_validation.cert.certificate_arn
+    ssl_support_method       = "sni-only"
+    minimum_protocol_version = "TLSv1.2_2021"
   }
 
   # React SPA Routing Configuration: Redirect 404/403 back to index.html with 200 OK
@@ -564,4 +595,15 @@ output "GITHUB_SECRET_AWS_LAMBDA_FUNCTION_NAME" {
 output "CLOUDFRONT_DOMAIN_NAME" {
   value       = aws_cloudfront_distribution.cdn.domain_name
   description = "Access your production website globally at this HTTPS address!"
+}
+
+output "ACM_DNS_VALIDATION_RECORDS" {
+  value = [
+    for dvo in aws_acm_certificate.cert.domain_validation_options : {
+      domain_name = dvo.domain_name
+      cname_name  = dvo.resource_record_name
+      cname_value = dvo.resource_record_value
+    }
+  ]
+  description = "Create these CNAME records in IONOS to validate your SSL certificate."
 }
