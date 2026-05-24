@@ -486,9 +486,11 @@ resource "aws_s3_bucket_policy" "uploads_public_policy" {
 # ==========================================
 
 resource "aws_dynamodb_table" "users" {
-  name         = "sophielamour-users"
-  billing_mode = "PAY_PER_REQUEST"
-  hash_key     = "email"
+  name           = "sophielamour-users"
+  billing_mode   = "PROVISIONED"
+  read_capacity  = 1
+  write_capacity = 1
+  hash_key       = "email"
 
   attribute {
     name = "email"
@@ -497,9 +499,11 @@ resource "aws_dynamodb_table" "users" {
 }
 
 resource "aws_dynamodb_table" "blog_posts" {
-  name         = "sophielamour-blog-posts"
-  billing_mode = "PAY_PER_REQUEST"
-  hash_key     = "id"
+  name           = "sophielamour-blog-posts"
+  billing_mode   = "PROVISIONED"
+  read_capacity  = 1
+  write_capacity = 1
+  hash_key       = "id"
 
   attribute {
     name = "id"
@@ -515,13 +519,17 @@ resource "aws_dynamodb_table" "blog_posts" {
     name            = "slug-index"
     hash_key        = "slug"
     projection_type = "ALL"
+    read_capacity   = 1
+    write_capacity  = 1
   }
 }
 
 resource "aws_dynamodb_table" "testimonials" {
-  name         = "sophielamour-testimonials"
-  billing_mode = "PAY_PER_REQUEST"
-  hash_key     = "id"
+  name           = "sophielamour-testimonials"
+  billing_mode   = "PROVISIONED"
+  read_capacity  = 1
+  write_capacity = 1
+  hash_key       = "id"
 
   attribute {
     name = "id"
@@ -530,9 +538,11 @@ resource "aws_dynamodb_table" "testimonials" {
 }
 
 resource "aws_dynamodb_table" "contact_requests" {
-  name         = "sophielamour-contact-requests"
-  billing_mode = "PAY_PER_REQUEST"
-  hash_key     = "id"
+  name           = "sophielamour-contact-requests"
+  billing_mode   = "PROVISIONED"
+  read_capacity  = 1
+  write_capacity = 1
+  hash_key       = "id"
 
   attribute {
     name = "id"
@@ -541,9 +551,11 @@ resource "aws_dynamodb_table" "contact_requests" {
 }
 
 resource "aws_dynamodb_table" "uploads" {
-  name         = "sophielamour-uploads"
-  billing_mode = "PAY_PER_REQUEST"
-  hash_key     = "file_id"
+  name           = "sophielamour-uploads"
+  billing_mode   = "PROVISIONED"
+  read_capacity  = 1
+  write_capacity = 1
+  hash_key       = "file_id"
 
   attribute {
     name = "file_id"
@@ -552,14 +564,46 @@ resource "aws_dynamodb_table" "uploads" {
 }
 
 resource "aws_dynamodb_table" "social_share_queue" {
-  name         = "sophielamour-social-share-queue"
-  billing_mode = "PAY_PER_REQUEST"
-  hash_key     = "id"
+  name           = "sophielamour-social-share-queue"
+  billing_mode   = "PROVISIONED"
+  read_capacity  = 1
+  write_capacity = 1
+  hash_key       = "id"
 
   attribute {
     name = "id"
     type = "S"
   }
+}
+
+# ==========================================
+# ⏰ EVENTBRIDGE KEEP-WARM RULE (UX COLD START MITIGATION)
+# ==========================================
+
+resource "aws_cloudwatch_event_rule" "keep_warm" {
+  name                = "sophielamour-keep-warm-rule"
+  description         = "Pings the backend Lambda function every 5 minutes to prevent cold starts"
+  schedule_expression = "rate(5 minutes)"
+}
+
+resource "aws_cloudwatch_event_target" "keep_warm_target" {
+  rule      = aws_cloudwatch_event_rule.keep_warm.name
+  target_id = "KeepLambdaWarm"
+  arn       = aws_lambda_function.backend.arn
+  input     = jsonencode({
+    "detail-type": "Scheduled Event",
+    "source": "aws.events",
+    "resources": [],
+    "detail": {}
+  })
+}
+
+resource "aws_lambda_permission" "allow_cloudwatch_keep_warm" {
+  statement_id  = "AllowExecutionFromCloudWatchKeepWarm"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.backend.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.keep_warm.arn
 }
 
 # ==========================================
