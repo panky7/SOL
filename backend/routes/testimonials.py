@@ -69,7 +69,7 @@ async def delete_testimonial(testimonial_id: str, request: Request):
 
 class FacebookSettings(BaseModel):
     feed_style: str = "juicer"
-    juicer_feed_id: Optional[str] = "sophielamourcoaching"
+    juicer_feed_id: Optional[str] = "juicer"
     post_url_1: Optional[str] = ""
     post_url_2: Optional[str] = ""
     post_url_3: Optional[str] = ""
@@ -81,12 +81,14 @@ async def get_facebook_settings():
     if not settings:
         return {
             "feed_style": "juicer",
-            "juicer_feed_id": "sophielamourcoaching",
+            "juicer_feed_id": "juicer",
             "post_url_1": "",
             "post_url_2": "",
             "post_url_3": ""
         }
     settings.pop("_id", None)
+    if settings.get("juicer_feed_id") == "sophielamourcoaching":
+        settings["juicer_feed_id"] = "juicer"
     return settings
 
 

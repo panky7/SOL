@@ -17,7 +17,7 @@ const AdminDashboard = () => {
   const [contactRequests, setContactRequests] = useState([]);
   const [fbSettings, setFbSettings] = useState({
     feed_style: 'juicer',
-    juicer_feed_id: 'sophielamourcoaching',
+    juicer_feed_id: 'juicer',
     post_url_1: '',
     post_url_2: '',
     post_url_3: ''
@@ -331,7 +331,7 @@ const AdminDashboard = () => {
                         type="text"
                         value={fbSettings.juicer_feed_id || ''}
                         onChange={(e) => setFbSettings({ ...fbSettings, juicer_feed_id: e.target.value })}
-                        placeholder="Ex: sophielamourcoaching"
+                        placeholder="Ex: juicer"
                         className="w-full border border-[#ADE8F4] rounded-xl px-4 py-3 text-[#023E8A] font-sans focus:outline-none focus:border-[#0077B6]"
                       />
                     </div>

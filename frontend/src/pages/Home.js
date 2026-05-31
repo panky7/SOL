@@ -15,7 +15,7 @@ const Home = () => {
   const [blogPosts, setBlogPosts] = useState([]);
   const [fbSettings, setFbSettings] = useState({
     feed_style: 'juicer',
-    juicer_feed_id: 'sophielamourcoaching',
+    juicer_feed_id: 'juicer',
     post_url_1: '',
     post_url_2: '',
     post_url_3: ''

@@ -65,7 +65,9 @@ resource "aws_acm_certificate" "cert" {
   validation_method = "DNS"
 
   subject_alternative_names = [
-    "www.sophielamourcoaching.fr"
+    "www.sophielamourcoaching.fr",
+    "sophielamourcoaching.com",
+    "www.sophielamourcoaching.com"
   ]
 
   lifecycle {
@@ -195,7 +197,7 @@ resource "aws_lambda_function" "backend" {
 
   environment {
     variables = {
-      FRONTEND_URL   = "https://${aws_cloudfront_distribution.cdn.domain_name},http://localhost:3000"
+      FRONTEND_URL   = local.env == "prod" ? "https://sophielamourcoaching.fr,https://www.sophielamourcoaching.fr,https://sophielamourcoaching.com,https://www.sophielamourcoaching.com,https://${aws_cloudfront_distribution.cdn.domain_name},http://localhost:3000" : "https://${aws_cloudfront_distribution.cdn.domain_name},http://localhost:3000"
       JWT_SECRET     = "supersecretjwtkey123_sophie_lamour_2026_${local.env}"
       ADMIN_EMAIL    = "admin@sophielamour.com"
       ADMIN_PASSWORD = "SophieAdmin2025!"
@@ -259,7 +261,12 @@ resource "aws_cloudfront_distribution" "cdn" {
   enabled             = true
   is_ipv6_enabled     = true
   default_root_object = "index.html"
-  aliases             = local.env == "prod" ? ["sophielamourcoaching.fr", "www.sophielamourcoaching.fr"] : []
+  aliases             = local.env == "prod" ? [
+    "sophielamourcoaching.fr",
+    "www.sophielamourcoaching.fr",
+    "sophielamourcoaching.com",
+    "www.sophielamourcoaching.com"
+  ] : []
 
   # Origin 1: Private S3 Frontend Bucket
   origin {
