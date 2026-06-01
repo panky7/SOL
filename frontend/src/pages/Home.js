@@ -13,58 +13,14 @@ const Home = () => {
   const { t, language } = useLanguage();
   const [testimonials, setTestimonials] = useState([]);
   const [blogPosts, setBlogPosts] = useState([]);
-  const [fbSettings, setFbSettings] = useState({
-    feed_style: 'juicer',
-    juicer_feed_id: 'juicer',
-    post_url_1: '',
-    post_url_2: '',
-    post_url_3: ''
-  });
   const [emblaRef] = useEmblaCarousel({ loop: true });
 
   useEffect(() => {
     fetchTestimonials();
     fetchBlogPosts();
-    fetchFbSettings();
   }, []);
 
-  const fetchFbSettings = async () => {
-    try {
-      const { data } = await axios.get(`${API_URL}/api/testimonials/settings/facebook`);
-      setFbSettings(data);
-    } catch (error) {
-      console.error('Error fetching FB settings:', error);
-    }
-  };
 
-  useEffect(() => {
-    if (window.FB) {
-      try {
-        window.FB.XFBML.parse();
-      } catch (e) {
-        console.error("Failed to parse FB XFBML", e);
-      }
-    }
-  }, [fbSettings]);
-
-  useEffect(() => {
-    if (window.Juicer) {
-      try {
-        window.Juicer.initialize();
-      } catch (e) {
-        console.error("Failed to initialize Juicer", e);
-      }
-    }
-    return () => {
-      if (window.Juicer) {
-        try {
-          window.Juicer.remove();
-        } catch (e) {
-          console.error("Failed to remove Juicer", e);
-        }
-      }
-    };
-  }, [fbSettings.juicer_feed_id]);
 
   const fetchTestimonials = async () => {
     try {
@@ -394,114 +350,7 @@ const Home = () => {
         </section>
       )}
 
-      {/* Facebook/Social Feed Section */}
-      <section className="py-24 lg:py-32 px-6 md:px-12 lg:px-24 bg-[#CAF0F8]/20" data-testid="facebook-feed-section">
-        <div className="text-center mb-16">
-          <h2 className="text-3xl sm:text-4xl lg:text-5xl tracking-tight leading-snug font-serif text-[#03045E] mb-4">
-            {t("Actualités & Partages", "News & Inspiration")}
-          </h2>
-          <p className="text-base lg:text-lg leading-relaxed text-[#023E8A] font-sans max-w-2xl mx-auto">
-            {t(
-              "Retrouvez mes dernières publications et réflexions partagées sur les réseaux.",
-              "Discover my latest posts and reflections shared on social media."
-            )}
-          </p>
-        </div>
 
-        <div className="max-w-6xl mx-auto">
-          {fbSettings.feed_style === 'juicer' && (
-            <div className="bg-white rounded-3xl p-8 border border-[#ADE8F4] shadow-[0_8px_32px_rgba(44,44,42,0.04)] overflow-hidden">
-              <ul 
-                key={fbSettings.juicer_feed_id} 
-                className="juicer-feed" 
-                data-feed-id={fbSettings.juicer_feed_id} 
-                data-per="3" 
-                data-columns="3"
-                data-truncate="150"
-              >
-                <h3 className="fb-xfbml-parse-ignore text-center text-[#023E8A] py-6 font-sans">
-                  <a 
-                    href={`https://www.juicer.io/feeds/${fbSettings.juicer_feed_id}`} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="underline hover:text-[#0077B6] transition-colors font-medium"
-                  >
-                    {t("Voir mes publications sur Facebook", "View my posts on Facebook")}
-                  </a>
-                </h3>
-              </ul>
-            </div>
-          )}
-
-          {fbSettings.feed_style === 'timeline' && (
-            <div className="flex justify-center">
-              <div className="w-full max-w-[500px] bg-white rounded-3xl p-6 border border-[#ADE8F4] shadow-[0_8px_32px_rgba(44,44,42,0.04)] overflow-hidden flex justify-center">
-                <div
-                  className="fb-page"
-                  data-href="https://www.facebook.com/61576060076125"
-                  data-tabs="timeline"
-                  data-width="500"
-                  data-height="600"
-                  data-small-header="false"
-                  data-adapt-container-width="true"
-                  data-hide-cover="false"
-                  data-show-facepile="true"
-                >
-                  <blockquote cite="https://www.facebook.com/61576060076125" className="fb-xfbml-parse-ignore">
-                    <a href="https://www.facebook.com/61576060076125">Sophie Lamour Coaching</a>
-                  </blockquote>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {fbSettings.feed_style === 'cards' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {[fbSettings.post_url_1, fbSettings.post_url_2, fbSettings.post_url_3].map((url, index) => (
-                url ? (
-                  <div key={index} className="bg-white rounded-3xl p-4 border border-[#ADE8F4] shadow-[0_8px_32px_rgba(44,44,42,0.04)] overflow-hidden flex justify-center min-h-[400px]">
-                    <div 
-                      className="fb-post" 
-                      data-href={url} 
-                      data-width="auto"
-                      data-show-text="true"
-                    >
-                      <blockquote cite={url} className="fb-xfbml-parse-ignore">
-                        <a href={url}>{t("Voir la publication sur Facebook", "View post on Facebook")}</a>
-                      </blockquote>
-                    </div>
-                  </div>
-                ) : (
-                  <div key={index} className="bg-white rounded-3xl p-8 border border-[#ADE8F4] shadow-[0_8px_32px_rgba(44,44,42,0.04)] flex flex-col justify-between min-h-[300px]">
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="w-10 h-10 rounded-full bg-[#0077B6]/10 flex items-center justify-center">
-                        <span className="font-bold text-[#0077B6] font-sans">S</span>
-                      </div>
-                      <div>
-                        <h4 className="font-semibold text-[#03045E] font-sans text-sm">Sophie Lamour</h4>
-                        <p className="text-xs text-[#023E8A]/60 font-sans">Publication Facebook</p>
-                      </div>
-                    </div>
-                    <p className="text-sm leading-relaxed text-[#023E8A] font-sans mb-6">
-                      {index === 0 && t("Découvrez mes conseils et partages pour retrouver votre équilibre intérieur.", "Discover my tips and insights to find your inner balance.")}
-                      {index === 1 && t("Rejoignez nos prochains ateliers collectifs pour vivre un moment de partage et de convivialité.", "Join our next group workshops to experience a moment of sharing and connection.")}
-                      {index === 2 && t("Libérez votre joie de vivre au quotidien grâce à nos séances de Yoga du Rire !", "Release your joy of living daily with our Laughter Yoga sessions!")}
-                    </p>
-                    <a 
-                      href="https://www.facebook.com/61576060076125" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="text-[#0077B6] hover:text-[#023E8A] text-sm font-semibold tracking-wider uppercase font-sans mt-auto"
-                    >
-                      {t("Consulter la page", "View Page")} &rarr;
-                    </a>
-                  </div>
-                )
-              ))}
-            </div>
-          )}
-        </div>
-      </section>
 
       {/* CTA Banner */}
       <section className="py-24 px-6 md:px-12 lg:px-24 bg-[#0077B6]" data-testid="cta-banner">

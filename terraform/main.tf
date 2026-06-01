@@ -34,6 +34,12 @@ variable "github_repo" {
   description = "GitHub repository name"
 }
 
+variable "admin_email" {
+  type        = string
+  default     = "admin@sophielamour.com"
+  description = "Administrator email address for system alerts and settings"
+}
+
 # ==========================================
 # 🔌 PROVIDER CONFIGURATION
 # ==========================================
@@ -186,20 +192,21 @@ resource "aws_iam_role_policy_attachment" "lambda_logs" {
 }
 
 resource "aws_lambda_function" "backend" {
-  function_name    = "sophielamour-backend${local.env_suffix}"
-  role             = aws_iam_role.lambda_exec.arn
-  handler          = "server.handler"
-  runtime          = "python3.12"
-  filename         = data.archive_file.dummy_lambda.output_path
-  source_code_hash = data.archive_file.dummy_lambda.output_base64sha256
-  timeout          = 30
-  memory_size      = 256
+  function_name                  = "sophielamour-backend${local.env_suffix}"
+  role                           = aws_iam_role.lambda_exec.arn
+  handler                        = "server.handler"
+  runtime                        = "python3.12"
+  filename                       = data.archive_file.dummy_lambda.output_path
+  source_code_hash               = data.archive_file.dummy_lambda.output_base64sha256
+  timeout                        = 30
+  memory_size                    = 256
+  reserved_concurrent_executions = 5
 
   environment {
     variables = {
       FRONTEND_URL   = local.env == "prod" ? "https://sophielamourcoaching.fr,https://www.sophielamourcoaching.fr,https://sophielamourcoaching.com,https://www.sophielamourcoaching.com,https://${aws_cloudfront_distribution.cdn.domain_name},http://localhost:3000" : "https://${aws_cloudfront_distribution.cdn.domain_name},http://localhost:3000"
       JWT_SECRET     = "supersecretjwtkey123_sophie_lamour_2026_${local.env}"
-      ADMIN_EMAIL    = "admin@sophielamour.com"
+      ADMIN_EMAIL    = var.admin_email
       ADMIN_PASSWORD = "SophieAdmin2025!"
       MOCK_DB        = "false"
       ENVIRONMENT    = local.env
@@ -623,6 +630,26 @@ resource "aws_lambda_permission" "allow_cloudwatch_keep_warm" {
   function_name = aws_lambda_function.backend.function_name
   principal     = "events.amazonaws.com"
   source_arn    = aws_cloudwatch_event_rule.keep_warm.arn
+}
+
+# ==========================================
+# ⏰ BUDGET & COST BILLING ALERTS
+# ==========================================
+
+resource "aws_budgets_budget" "monthly_budget" {
+  name              = "sophielamour-monthly-budget-${local.env}"
+  budget_type       = "COST"
+  limit_amount      = "5"
+  limit_unit        = "USD"
+  time_unit         = "MONTHLY"
+
+  notification {
+    comparison_operator        = "GREATER_THAN"
+    threshold                  = 100
+    threshold_type             = "PERCENTAGE"
+    notification_type          = "ACTUAL"
+    subscriber_email_addresses = [var.admin_email]
+  }
 }
 
 # ==========================================

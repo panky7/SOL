@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { Helmet } from 'react-helmet-async';
 import axios from 'axios';
-import { Plus, Edit2, Trash2, LogOut, FileText, MessageSquare, Mail, Share2 } from 'lucide-react';
+import { Plus, Edit2, Trash2, LogOut, FileText, MessageSquare, Mail } from 'lucide-react';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL || '';
 
@@ -15,13 +15,7 @@ const AdminDashboard = () => {
   const [blogPosts, setBlogPosts] = useState([]);
   const [testimonials, setTestimonials] = useState([]);
   const [contactRequests, setContactRequests] = useState([]);
-  const [fbSettings, setFbSettings] = useState({
-    feed_style: 'juicer',
-    juicer_feed_id: 'juicer',
-    post_url_1: '',
-    post_url_2: '',
-    post_url_3: ''
-  });
+
   const [activeTab, setActiveTab] = useState('blog');
   const [saveLoading, setSaveLoading] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -33,35 +27,16 @@ const AdminDashboard = () => {
 
   const fetchData = async () => {
     try {
-      const [postsRes, testimonialsRes, contactRes, fbRes] = await Promise.all([
+      const [postsRes, testimonialsRes, contactRes] = await Promise.all([
         axios.get(`${API_URL}/api/blog/posts`, { withCredentials: true }),
         axios.get(`${API_URL}/api/testimonials`, { withCredentials: true }),
-        axios.get(`${API_URL}/api/contact/requests`, { withCredentials: true }),
-        axios.get(`${API_URL}/api/testimonials/settings/facebook`, { withCredentials: true })
+        axios.get(`${API_URL}/api/contact/requests`, { withCredentials: true })
       ]);
       setBlogPosts(postsRes.data);
       setTestimonials(testimonialsRes.data);
       setContactRequests(contactRes.data);
-      setFbSettings(fbRes.data);
     } catch (error) {
       console.error('Error fetching data:', error);
-    }
-  };
-
-  const handleSaveFbSettings = async (e) => {
-    e.preventDefault();
-    setSaveLoading(true);
-    setSaveSuccess(false);
-    setSaveError('');
-    try {
-      await axios.put(`${API_URL}/api/testimonials/settings/facebook`, fbSettings, { withCredentials: true });
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
-    } catch (error) {
-      console.error('Error saving FB settings:', error);
-      setSaveError('Une erreur est survenue lors de la sauvegarde des paramètres.');
-    } finally {
-      setSaveLoading(false);
     }
   };
 
@@ -146,16 +121,7 @@ const AdminDashboard = () => {
               <Mail size={18} />
               Messages ({contactRequests.length})
             </button>
-            <button
-              onClick={() => setActiveTab('facebook')}
-              data-testid="tab-facebook"
-              className={`pb-4 px-4 flex items-center gap-2 border-b-2 transition-colors ${
-                activeTab === 'facebook' ? 'border-[#0077B6] text-[#0077B6]' : 'border-transparent text-[#023E8A]'
-              }`}
-            >
-              <Share2 size={18} />
-              Flux Facebook
-            </button>
+
           </div>
 
           {activeTab === 'blog' && (
@@ -305,114 +271,6 @@ const AdminDashboard = () => {
             </div>
           )}
 
-          {activeTab === 'facebook' && (
-            <div className="max-w-2xl bg-white rounded-3xl p-8 border border-[#ADE8F4] shadow-[0_8px_32px_rgba(44,44,42,0.04)]">
-              <h2 className="text-2xl font-serif text-[#03045E] mb-6">Paramètres du flux social</h2>
-              
-              <form onSubmit={handleSaveFbSettings} className="space-y-6">
-                <div>
-                  <label className="block text-sm font-semibold text-[#03045E] mb-2 font-sans">Style d'affichage</label>
-                  <select
-                    value={fbSettings.feed_style}
-                    onChange={(e) => setFbSettings({ ...fbSettings, feed_style: e.target.value })}
-                    className="w-full border border-[#ADE8F4] rounded-2xl px-4 py-3 text-[#023E8A] bg-white font-sans focus:outline-none focus:border-[#0077B6]"
-                  >
-                    <option value="juicer">Juicer.io (Cartes stylisées - Recommandé)</option>
-                    <option value="cards">Cartes Facebook (3 publications spécifiques)</option>
-                    <option value="timeline">Iframe Standard (Fil d'actualité complet)</option>
-                  </select>
-                </div>
-
-                {fbSettings.feed_style === 'juicer' && (
-                  <div className="space-y-4 p-5 bg-[#CAF0F8]/30 rounded-2xl border border-[#ADE8F4]">
-                    <div>
-                      <label className="block text-sm font-semibold text-[#03045E] mb-1 font-sans">Identifiant de flux Juicer.io (Feed ID)</label>
-                      <input
-                        type="text"
-                        value={fbSettings.juicer_feed_id || ''}
-                        onChange={(e) => setFbSettings({ ...fbSettings, juicer_feed_id: e.target.value })}
-                        placeholder="Ex: juicer"
-                        className="w-full border border-[#ADE8F4] rounded-xl px-4 py-3 text-[#023E8A] font-sans focus:outline-none focus:border-[#0077B6]"
-                      />
-                    </div>
-                    <div className="text-xs text-[#023E8A]/80 space-y-2 leading-relaxed font-sans">
-                      <p className="font-semibold text-[#03045E]">Comment configurer Juicer.io gratuitement ?</p>
-                      <ol className="list-decimal pl-4 space-y-1">
-                        <li>Créez un compte gratuit sur <a href="https://www.juicer.io" target="_blank" rel="noopener noreferrer" className="text-[#0077B6] underline font-semibold">Juicer.io</a>.</li>
-                        <li>Ajoutez un flux social et liez votre page Facebook.</li>
-                        <li>Dans votre URL de tableau de bord Juicer, copiez votre nom de flux (ex: si l'adresse est <code className="bg-white px-1.5 py-0.5 rounded border text-[10px]">juicer.io/feeds/sophie</code>, le nom est <code className="bg-white px-1.5 py-0.5 rounded border text-[10px] font-bold">sophie</code>).</li>
-                        <li>Saisissez ce nom dans le champ ci-dessus.</li>
-                      </ol>
-                    </div>
-                  </div>
-                )}
-
-                {fbSettings.feed_style === 'cards' && (
-                  <div className="space-y-4 p-5 bg-[#CAF0F8]/30 rounded-2xl border border-[#ADE8F4]">
-                    <p className="text-xs text-[#023E8A]/70 font-sans">
-                      Saisissez les liens complets de 3 publications Facebook de votre page. Si un champ reste vide, une carte de présentation par défaut sera utilisée.
-                    </p>
-                    <div>
-                      <label className="block text-sm font-semibold text-[#03045E] mb-1 font-sans">URL de la publication 1</label>
-                      <input
-                        type="text"
-                        value={fbSettings.post_url_1 || ''}
-                        onChange={(e) => setFbSettings({ ...fbSettings, post_url_1: e.target.value })}
-                        placeholder="https://www.facebook.com/..."
-                        className="w-full border border-[#ADE8F4] rounded-xl px-4 py-3 text-[#023E8A] font-sans focus:outline-none focus:border-[#0077B6]"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-[#03045E] mb-1 font-sans">URL de la publication 2</label>
-                      <input
-                        type="text"
-                        value={fbSettings.post_url_2 || ''}
-                        onChange={(e) => setFbSettings({ ...fbSettings, post_url_2: e.target.value })}
-                        placeholder="https://www.facebook.com/..."
-                        className="w-full border border-[#ADE8F4] rounded-xl px-4 py-3 text-[#023E8A] font-sans focus:outline-none focus:border-[#0077B6]"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-[#03045E] mb-1 font-sans">URL de la publication 3</label>
-                      <input
-                        type="text"
-                        value={fbSettings.post_url_3 || ''}
-                        onChange={(e) => setFbSettings({ ...fbSettings, post_url_3: e.target.value })}
-                        placeholder="https://www.facebook.com/..."
-                        className="w-full border border-[#ADE8F4] rounded-xl px-4 py-3 text-[#023E8A] font-sans focus:outline-none focus:border-[#0077B6]"
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {fbSettings.feed_style === 'timeline' && (
-                  <div className="p-4 bg-yellow-50 text-yellow-800 rounded-2xl text-xs border border-yellow-200 font-sans leading-relaxed">
-                    Affiche la boîte de flux classique de Facebook. Les bloqueurs de publicités de vos clients peuvent masquer cet élément.
-                  </div>
-                )}
-
-                {saveSuccess && (
-                  <div className="p-4 bg-green-50 text-green-700 rounded-2xl text-sm font-medium border border-green-200 font-sans">
-                    Paramètres sauvegardés avec succès !
-                  </div>
-                )}
-
-                {saveError && (
-                  <div className="p-4 bg-red-50 text-red-600 rounded-2xl text-sm border border-red-200 font-sans">
-                    {saveError}
-                  </div>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={saveLoading}
-                  className="w-full bg-[#0077B6] hover:bg-[#023E8A] disabled:bg-gray-400 text-white rounded-2xl py-3.5 transition-all duration-300 font-semibold tracking-wide shadow-sm font-sans"
-                >
-                  {saveLoading ? 'Sauvegarde en cours...' : 'Enregistrer les modifications'}
-                </button>
-              </form>
-            </div>
-          )}
         </div>
       </div>
     </>
