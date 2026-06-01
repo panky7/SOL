@@ -93,6 +93,8 @@ async def serve_blog_post_preview(slug: str, request: Request):
     post = None
     if clean_slug:
         post = await db.blog_posts.find_one({"slug": clean_slug})
+        if not post and len(clean_slug) > 50:
+            post = await db.blog_posts.find_one({"slug": clean_slug[:50]})
         
     # 2. Locate index.html
     index_path = ROOT_DIR / "index.html"
