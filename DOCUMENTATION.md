@@ -605,9 +605,41 @@ A modern, elegant life coaching website for Sophie Lamour, featuring a beautiful
 
 ## 🚀 Deployment
 
-### Production URLs
-- **Frontend**: https://sophie-coaching.preview.emergentagent.com
-- **Backend API**: https://sophie-coaching.preview.emergentagent.com/api
+The deployment pipeline is fully automated via GitHub Actions on every push to the `main` and `dev` branches.
+
+### Environment Domains
+
+#### Production (branch `main`)
+- **Custom Domain URL**: https://www.sophielamourcoaching.fr (Redirects from https://sophielamourcoaching.fr)
+- **CloudFront Fallback URL**: https://d27uzt73hvni4g.cloudfront.net
+- **Backend API Origin**: https://www.sophielamourcoaching.fr/api
+
+#### Development (branch `dev`)
+- **CloudFront URL**: https://d3ltn3xymy1clc.cloudfront.net
+- **Backend API Origin**: https://d3ltn3xymy1clc.cloudfront.net/api
+
+---
+
+### AWS Infrastructure Assets
+
+Below is the list of provisioned AWS resources across environments (managed via Terraform):
+
+| AWS Resource | Development (`dev`) | Production (`prod` / `default`) |
+|--------------|-------------------|---------------------------------|
+| **CloudFront Distribution ID** | `ELNZI3H7DPSSP` | `E3QOZCGBRASV84` |
+| **S3 Frontend Bucket** | `sophielamour-frontend-dev` | `sophielamour-frontend` |
+| **S3 Uploads Bucket** | `sophielamour-uploads-dev` | `sophielamour-uploads` |
+| **Lambda Backend Function** | `sophielamour-backend-dev` | `sophielamour-backend` |
+| **API Gateway HTTP API** | `sophielamour-api-gateway-dev` | `sophielamour-api-gateway` |
+| **IAM Deploy Role (OIDC)** | `arn:aws:iam::464868388442:role/SophieLamourGitHubDeployRole-dev` | `arn:aws:iam::464868388442:role/SophieLamourGitHubDeployRole` |
+| **DynamoDB User Table** | `sophielamour-users-dev` | `sophielamour-users` |
+| **DynamoDB Blog Table** | `sophielamour-blog-posts-dev` | `sophielamour-blog-posts` |
+| **DynamoDB Testimonial Table** | `sophielamour-testimonials-dev` | `sophielamour-testimonials` |
+| **DynamoDB Message Table** | `sophielamour-contact-requests-dev` | `sophielamour-contact-requests` |
+| **DynamoDB Uploads Table** | `sophielamour-uploads-dev` | `sophielamour-uploads` |
+| **DynamoDB Queue Table** | `sophielamour-social-share-queue-dev` | `sophielamour-social-share-queue` |
+
+---
 
 ### Environment Setup
 ```bash
