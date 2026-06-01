@@ -52,6 +52,7 @@ jobs:
           cd frontend
           npm ci --legacy-peer-deps
           CI=false npm run build
+          cp build/index.html ../backend/index.html
 
       - name: 🚀 Deploy Frontend to Private S3
         run: |
@@ -74,6 +75,7 @@ jobs:
           pip install --target build_dist -r requirements-prod.txt
           cp -r routes build_dist/
           cp server.py build_dist/
+          cp index.html build_dist/
           cd build_dist
           zip -q -r ../lambda_function.zip .
 

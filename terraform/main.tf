@@ -200,7 +200,7 @@ resource "aws_lambda_function" "backend" {
   source_code_hash               = data.archive_file.dummy_lambda.output_base64sha256
   timeout                        = 30
   memory_size                    = 256
-  reserved_concurrent_executions = 5
+  reserved_concurrent_executions = local.env == "prod" ? 5 : null
 
   environment {
     variables = {
@@ -325,6 +325,19 @@ resource "aws_cloudfront_distribution" "cdn" {
     origin_request_policy_id = "b689b0a8-53d0-40ab-baf2-68738e2966ac" # AllViewerExceptHostHeader
 
     viewer_protocol_policy = "https-only"
+  }
+
+  # Blog Cache Behavior: Intercept blog posts and route to API Gateway for Meta Injection
+  ordered_cache_behavior {
+    path_pattern     = "/blog/*"
+    allowed_methods  = ["GET", "HEAD"]
+    cached_methods   = ["GET", "HEAD"]
+    target_origin_id = "APIGateway-Backend"
+
+    cache_policy_id          = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad" # CachingDisabled
+    origin_request_policy_id = "b689b0a8-53d0-40ab-baf2-68738e2966ac" # AllViewerExceptHostHeader
+
+    viewer_protocol_policy = "redirect-to-https"
   }
 
   restrictions {

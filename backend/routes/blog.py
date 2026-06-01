@@ -46,6 +46,8 @@ async def get_blog_posts(status: Optional[str] = None, limit: int = 100):
 @router.get("/posts/{slug}")
 async def get_blog_post(slug: str):
     post = await db.blog_posts.find_one({"slug": slug}, {"_id": 0})
+    if not post and len(slug) > 50:
+        post = await db.blog_posts.find_one({"slug": slug[:50]}, {"_id": 0})
     if not post:
         raise HTTPException(status_code=404, detail="Blog post not found")
     return post
