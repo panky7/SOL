@@ -138,12 +138,27 @@ async def serve_blog_post_preview(slug: str, request: Request):
     clean_excerpt = re.sub(r'<[^>]+>', '', excerpt)
 
     # 4. Construct metadata
-    host = request.headers.get("host", "www.sophielamourcoaching.com")
+    # Try x-forwarded-host first to support custom domain routing via CloudFront
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host", "")
+    if "execute-api" in host or not host:
+        # Fallback to the environment-specific domain if we are bypass routing/accessing Lambda direct
+        env = os.environ.get("ENVIRONMENT", "prod")
+        if env == "prod":
+            host = "www.sophielamourcoaching.com"
+        else:
+            host = "d3ltn3xymy1clc.cloudfront.net"
+            
     scheme = "https" if "localhost" not in host else "http"
     post_url = f"{scheme}://{host}/blog/{clean_slug}"
     
     featured_image = post.get("featured_image") or ""
-    
+    if featured_image and not (featured_image.startswith("http://") or featured_image.startswith("https://")):
+        # Convert relative image path to absolute URL
+        if featured_image.startswith("/"):
+            featured_image = f"{scheme}://{host}{featured_image}"
+        else:
+            featured_image = f"{scheme}://{host}/{featured_image}"
+            
     og_image_tag = f'<meta property="og:image" content="{featured_image}"/>' if featured_image else ''
     twitter_image_tag = f'<meta name="twitter:image" content="{featured_image}"/>' if featured_image else ''
 
