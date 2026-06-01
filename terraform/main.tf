@@ -198,7 +198,7 @@ resource "aws_lambda_function" "backend" {
   source_code_hash               = data.archive_file.dummy_lambda.output_base64sha256
   timeout                        = 30
   memory_size                    = 256
-  reserved_concurrent_executions = 5
+  reserved_concurrent_executions = local.env == "prod" ? 5 : null
 
   environment {
     variables = {
