@@ -2,8 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import axios from 'axios';
-import { ArrowLeft, Upload, X, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { ArrowLeft, Upload, X, Image as ImageIcon, Loader2, FileText, Code, Sparkles } from 'lucide-react';
 import 'react-quill-new/dist/quill.snow.css';
+import { marked } from 'marked';
+import { toast } from 'sonner';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL || '';
 
@@ -246,6 +248,43 @@ const BlogEditor = () => {
   const [fetching, setFetching] = useState(false);
   const [error, setError] = useState('');
 
+  const [activeTabFr, setActiveTabFr] = useState('visual'); // 'visual' | 'markdown'
+  const [activeTabEn, setActiveTabEn] = useState('visual'); // 'visual' | 'markdown'
+  const [markdownFr, setMarkdownFr] = useState('');
+  const [markdownEn, setMarkdownEn] = useState('');
+
+  const handleConvertFr = () => {
+    if (!markdownFr.trim()) {
+      toast.error("Veuillez coller du Markdown d'abord");
+      return;
+    }
+    try {
+      const html = marked.parse(markdownFr);
+      setFormData(prev => ({ ...prev, content_fr: html }));
+      setActiveTabFr('visual');
+      toast.success("Markdown converti en HTML avec succès !");
+    } catch (err) {
+      console.error("Markdown conversion error (FR):", err);
+      toast.error("Erreur lors de la conversion du Markdown");
+    }
+  };
+
+  const handleConvertEn = () => {
+    if (!markdownEn.trim()) {
+      toast.error("Please paste Markdown first");
+      return;
+    }
+    try {
+      const html = marked.parse(markdownEn);
+      setFormData(prev => ({ ...prev, content_en: html }));
+      setActiveTabEn('visual');
+      toast.success("Markdown successfully converted to HTML!");
+    } catch (err) {
+      console.error("Markdown conversion error (EN):", err);
+      toast.error("Error converting Markdown");
+    }
+  };
+
   useEffect(() => {
     if (isEditing) {
       fetchPost();
@@ -399,29 +438,125 @@ const BlogEditor = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-[#03045E] mb-2">
-                  Contenu (Francais) *
-                </label>
-                <div className="bg-white rounded-xl border border-[#ADE8F4]" data-testid="content-fr-editor">
-                  <QuillEditor
-                    value={formData.content_fr}
-                    onChange={(val) => setFormData(prev => ({ ...prev, content_fr: val }))}
-                    placeholder="Ecrivez votre article ici..."
-                  />
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-3">
+                  <label className="block text-sm font-medium text-[#03045E]">
+                    Contenu (Francais) *
+                  </label>
+                  <div className="flex gap-1.5 bg-[#CAF0F8]/50 p-1 rounded-xl border border-[#ADE8F4] self-stretch sm:self-auto">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTabFr('visual')}
+                      className={`flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${activeTabFr === 'visual' ? 'bg-[#0077B6] text-white shadow-sm' : 'text-[#023E8A] hover:bg-[#CAF0F8]'}`}
+                    >
+                      <Sparkles size={13} />
+                      Editeur Visuel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTabFr('markdown')}
+                      className={`flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${activeTabFr === 'markdown' ? 'bg-[#0077B6] text-white shadow-sm' : 'text-[#023E8A] hover:bg-[#CAF0F8]'}`}
+                    >
+                      <Code size={13} />
+                      Coller du Markdown
+                    </button>
+                  </div>
                 </div>
+
+                <div className={activeTabFr === 'visual' ? 'block' : 'hidden'}>
+                  <div className="bg-white rounded-xl border border-[#ADE8F4]" data-testid="content-fr-editor">
+                    <QuillEditor
+                      value={formData.content_fr}
+                      onChange={(val) => setFormData(prev => ({ ...prev, content_fr: val }))}
+                      placeholder="Ecrivez votre article ici..."
+                    />
+                  </div>
+                </div>
+
+                {activeTabFr === 'markdown' && (
+                  <div className="space-y-3 p-4 bg-[#F0F9FF]/60 rounded-xl border border-[#ADE8F4] transition-all duration-300">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-[#023E8A] font-medium flex items-center gap-1.5">
+                        <FileText size={14} className="text-[#48CAE4]" />
+                        Collez votre document Markdown ci-dessous
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleConvertFr}
+                        className="bg-[#0077B6] text-white hover:bg-[#0096C7] px-4 py-1.5 rounded-full text-xs font-semibold shadow-sm hover:shadow transition-all flex items-center gap-1"
+                      >
+                        Convertir en HTML
+                      </button>
+                    </div>
+                    <textarea
+                      value={markdownFr}
+                      onChange={(e) => setMarkdownFr(e.target.value)}
+                      placeholder="# Titre de l'article&#10;&#10;Ceci est un paragraphe avec du **texte en gras** et du *texte en italique*.&#10;&#10;- Element 1&#10;- Element 2&#10;&#10;## Sous-titre&#10;&#10;[Visitez mon site](https://sophielamour.com)"
+                      rows={10}
+                      className="w-full p-4 rounded-xl border border-[#ADE8F4] focus:outline-none focus:border-[#0077B6] font-mono text-sm text-[#03045E] bg-white resize-y"
+                    />
+                  </div>
+                )}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-[#03045E] mb-2">
-                  Content (English) *
-                </label>
-                <div className="bg-white rounded-xl border border-[#ADE8F4]" data-testid="content-en-editor">
-                  <QuillEditor
-                    value={formData.content_en}
-                    onChange={(val) => setFormData(prev => ({ ...prev, content_en: val }))}
-                    placeholder="Write your article here..."
-                  />
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-3">
+                  <label className="block text-sm font-medium text-[#03045E]">
+                    Content (English) *
+                  </label>
+                  <div className="flex gap-1.5 bg-[#CAF0F8]/50 p-1 rounded-xl border border-[#ADE8F4] self-stretch sm:self-auto">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTabEn('visual')}
+                      className={`flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${activeTabEn === 'visual' ? 'bg-[#0077B6] text-white shadow-sm' : 'text-[#023E8A] hover:bg-[#CAF0F8]'}`}
+                    >
+                      <Sparkles size={13} />
+                      Visual Editor
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTabEn('markdown')}
+                      className={`flex items-center gap-1.5 px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${activeTabEn === 'markdown' ? 'bg-[#0077B6] text-white shadow-sm' : 'text-[#023E8A] hover:bg-[#CAF0F8]'}`}
+                    >
+                      <Code size={13} />
+                      Paste Markdown
+                    </button>
+                  </div>
                 </div>
+
+                <div className={activeTabEn === 'visual' ? 'block' : 'hidden'}>
+                  <div className="bg-white rounded-xl border border-[#ADE8F4]" data-testid="content-en-editor">
+                    <QuillEditor
+                      value={formData.content_en}
+                      onChange={(val) => setFormData(prev => ({ ...prev, content_en: val }))}
+                      placeholder="Write your article here..."
+                    />
+                  </div>
+                </div>
+
+                {activeTabEn === 'markdown' && (
+                  <div className="space-y-3 p-4 bg-[#F0F9FF]/60 rounded-xl border border-[#ADE8F4] transition-all duration-300">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-[#023E8A] font-medium flex items-center gap-1.5">
+                        <FileText size={14} className="text-[#48CAE4]" />
+                        Paste your Markdown document below
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleConvertEn}
+                        className="bg-[#0077B6] text-white hover:bg-[#0096C7] px-4 py-1.5 rounded-full text-xs font-semibold shadow-sm hover:shadow transition-all flex items-center gap-1"
+                      >
+                        Convert to HTML
+                      </button>
+                    </div>
+                    <textarea
+                      value={markdownEn}
+                      onChange={(e) => setMarkdownEn(e.target.value)}
+                      placeholder="# Article Title&#10;&#10;This is a paragraph with **bold text** and *italic text*.&#10;&#10;- Item 1&#10;- Item 2&#10;&#10;## Subheading&#10;&#10;[Visit my site](https://sophielamour.com)"
+                      rows={10}
+                      className="w-full p-4 rounded-xl border border-[#ADE8F4] focus:outline-none focus:border-[#0077B6] font-mono text-sm text-[#03045E] bg-white resize-y"
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
