@@ -4,7 +4,8 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI, APIRouter, Request
+from fastapi.responses import HTMLResponse
 from starlette.middleware.cors import CORSMiddleware
 from datetime import datetime, timezone
 import os
@@ -80,6 +81,102 @@ async def startup_event():
             f.write(f"- POST /api/auth/logout\n")
     except Exception as e:
         logger.warning(f"Could not write credentials file (expected on read-only environments like AWS Lambda): {e}")
+
+import re
+
+@app.get("/blog/{slug:path}", response_class=HTMLResponse)
+async def serve_blog_post_preview(slug: str, request: Request):
+    # 1. Fetch post from DynamoDB/mock db
+    # Clean the slug by removing any trailing slashes
+    clean_slug = slug.strip("/")
+    
+    post = None
+    if clean_slug:
+        post = await db.blog_posts.find_one({"slug": clean_slug})
+        
+    # 2. Locate index.html
+    index_path = ROOT_DIR / "index.html"
+    if not index_path.exists():
+        # local development fallback path
+        index_path = ROOT_DIR.parent / "frontend" / "build" / "index.html"
+        
+    if not index_path.exists():
+        return HTMLResponse(
+            content="<html><body><h1>Sophie Lamour Coaching</h1><p>Frontend is not built. Please run npm run build in the frontend directory.</p></body></html>",
+            status_code=500
+        )
+
+    with open(index_path, "r", encoding="utf-8") as f:
+        html_content = f.read()
+
+    # If post not found or clean_slug is empty, return unmodified index.html for SPA to route
+    if not post:
+        return HTMLResponse(content=html_content)
+
+    # 3. Determine language
+    lang = "fr"
+    # Check query param first
+    if "lang" in request.query_params:
+        lang = request.query_params["lang"]
+    else:
+        # Check Accept-Language header
+        accept_lang = request.headers.get("accept-language", "")
+        if "en" in accept_lang.lower() and "fr" not in accept_lang.lower():
+            lang = "en"
+
+    # Get title and excerpt based on language
+    title = post.get("title_fr") if lang == "fr" else post.get("title_en")
+    excerpt = post.get("excerpt_fr") if lang == "fr" else post.get("excerpt_en")
+    
+    # Fallbacks if a language field is missing
+    if not title:
+        title = post.get("title_fr") or post.get("title_en") or "Sophie Lamour"
+    if not excerpt:
+        excerpt = post.get("excerpt_fr") or post.get("excerpt_en") or ""
+
+    # Clear HTML tags from excerpt
+    clean_excerpt = re.sub(r'<[^>]+>', '', excerpt)
+
+    # 4. Construct metadata
+    host = request.headers.get("host", "www.sophielamourcoaching.com")
+    scheme = "https" if "localhost" not in host else "http"
+    post_url = f"{scheme}://{host}/blog/{clean_slug}"
+    
+    featured_image = post.get("featured_image") or ""
+    
+    og_image_tag = f'<meta property="og:image" content="{featured_image}"/>' if featured_image else ''
+    twitter_image_tag = f'<meta name="twitter:image" content="{featured_image}"/>' if featured_image else ''
+
+    # 5. Perform replacements in html_content
+    # Replace title
+    default_title = "<title>Sophie Lamour | Coach de vie et développement personnel</title>"
+    if default_title in html_content:
+        html_content = html_content.replace(default_title, f"<title>{title} - Sophie Lamour</title>")
+    else:
+        html_content = re.sub(r"<title>.*?</title>", f"<title>{title} - Sophie Lamour</title>", html_content)
+
+    # Replace meta description
+    default_desc = '<meta name="description" content="Sophie Lamour - Coach de vie et développement personnel. Accompagnement personnalisé en coaching professionnel, parentalité, home organising et ikigaï."/>'
+    if default_desc in html_content:
+        html_content = html_content.replace(default_desc, f'<meta name="description" content="{clean_excerpt}"/>')
+    else:
+        html_content = re.sub(r'<meta name="description" content=".*?"/?>', f'<meta name="description" content="{clean_excerpt}"/>', html_content)
+
+    # Inject Open Graph and Twitter card tags
+    og_tags = f"""<meta property="og:title" content="{title}"/>
+<meta property="og:description" content="{clean_excerpt}"/>
+{og_image_tag}
+<meta property="og:url" content="{post_url}"/>
+<meta property="og:type" content="article"/>
+<meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:title" content="{title}"/>
+<meta name="twitter:description" content="{clean_excerpt}"/>
+{twitter_image_tag}
+</head>"""
+
+    html_content = html_content.replace("</head>", og_tags)
+    
+    return HTMLResponse(content=html_content)
 
 from mangum import Mangum
 handler = Mangum(app)
