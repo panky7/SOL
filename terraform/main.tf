@@ -58,6 +58,12 @@ data "aws_caller_identity" "current" {}
 locals {
   env        = terraform.workspace == "default" ? "prod" : terraform.workspace
   env_suffix = local.env == "prod" ? "" : "-${local.env}"
+  production_frontend_origins = [
+    "https://sophielamourcoaching.fr",
+    "https://www.sophielamourcoaching.fr",
+    "https://sophielamourcoaching.com",
+    "https://www.sophielamourcoaching.com"
+  ]
 }
 
 # ==========================================
@@ -155,6 +161,45 @@ resource "aws_cloudfront_origin_access_control" "oac" {
   signing_protocol                  = "sigv4"
 }
 
+resource "aws_cloudfront_response_headers_policy" "security_headers" {
+  name    = "sophielamour-security-headers${local.env_suffix}"
+  comment = "Security headers for Sophie Lamour CloudFront responses"
+
+  security_headers_config {
+    content_security_policy {
+      content_security_policy = "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; script-src 'self' 'unsafe-inline' https://app.posthog.com https://*.posthog.com https://assets.calendly.com https://www.googletagmanager.com https://maps.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://assets.calendly.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https:; frame-src 'self' https://calendly.com https://*.calendly.com https://www.google.com https://www.google.fr;"
+      override                = true
+    }
+
+    content_type_options {
+      override = true
+    }
+
+    frame_options {
+      frame_option = "DENY"
+      override     = true
+    }
+
+    referrer_policy {
+      referrer_policy = "strict-origin-when-cross-origin"
+      override        = true
+    }
+
+    strict_transport_security {
+      access_control_max_age_sec = 63072000
+      include_subdomains         = true
+      preload                    = true
+      override                   = true
+    }
+
+    xss_protection {
+      mode_block = true
+      protection = true
+      override   = true
+    }
+  }
+}
+
 # ==========================================
 # 🐍 LAMBDA BACKEND FUNCTION
 # ==========================================
@@ -204,11 +249,12 @@ resource "aws_lambda_function" "backend" {
 
   environment {
     variables = {
-      FRONTEND_URL   = local.env == "prod" ? "https://sophielamourcoaching.fr,https://www.sophielamourcoaching.fr,https://sophielamourcoaching.com,https://www.sophielamourcoaching.com,https://${aws_cloudfront_distribution.cdn.domain_name},http://localhost:3000" : "https://${aws_cloudfront_distribution.cdn.domain_name},http://localhost:3000"
+      FRONTEND_URL   = local.env == "prod" ? join(",", concat(local.production_frontend_origins, ["http://localhost:3000"])) : "http://localhost:3000"
       JWT_SECRET     = "supersecretjwtkey123_sophie_lamour_2026_${local.env}"
       ADMIN_EMAIL    = var.admin_email
       ADMIN_PASSWORD = "SophieAdmin2025!"
       MOCK_DB        = "false"
+      ENV            = local.env == "prod" ? "production" : local.env
       ENVIRONMENT    = local.env
     }
   }
@@ -222,10 +268,11 @@ resource "aws_apigatewayv2_api" "http_api" {
   name          = "sophielamour-api-gateway${local.env_suffix}"
   protocol_type = "HTTP"
   cors_configuration {
-    allow_origins = ["*"]
-    allow_methods = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
-    allow_headers = ["*"]
-    max_age       = 300
+    allow_origins     = local.env == "prod" ? local.production_frontend_origins : ["http://localhost:3000"]
+    allow_methods     = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+    allow_headers     = ["content-type", "authorization", "x-requested-with"]
+    allow_credentials = true
+    max_age           = 300
   }
 }
 
@@ -268,7 +315,7 @@ resource "aws_cloudfront_distribution" "cdn" {
   enabled             = true
   is_ipv6_enabled     = true
   default_root_object = "index.html"
-  aliases             = local.env == "prod" ? [
+  aliases = local.env == "prod" ? [
     "sophielamourcoaching.fr",
     "www.sophielamourcoaching.fr",
     "sophielamourcoaching.com",
@@ -296,9 +343,10 @@ resource "aws_cloudfront_distribution" "cdn" {
 
   # Default Cache Behavior: Serve S3 Static Assets
   default_cache_behavior {
-    allowed_methods  = ["GET", "HEAD"]
-    cached_methods   = ["GET", "HEAD"]
-    target_origin_id = "S3-Frontend"
+    allowed_methods            = ["GET", "HEAD"]
+    cached_methods             = ["GET", "HEAD"]
+    target_origin_id           = "S3-Frontend"
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.security_headers.id
 
     forwarded_values {
       query_string = false
@@ -321,8 +369,9 @@ resource "aws_cloudfront_distribution" "cdn" {
     cached_methods   = ["GET", "HEAD"]
     target_origin_id = "APIGateway-Backend"
 
-    cache_policy_id          = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad" # CachingDisabled
-    origin_request_policy_id = "b689b0a8-53d0-40ab-baf2-68738e2966ac" # AllViewerExceptHostHeader
+    cache_policy_id            = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad" # CachingDisabled
+    origin_request_policy_id   = "b689b0a8-53d0-40ab-baf2-68738e2966ac" # AllViewerExceptHostHeader
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.security_headers.id
 
     viewer_protocol_policy = "https-only"
   }
@@ -334,8 +383,9 @@ resource "aws_cloudfront_distribution" "cdn" {
     cached_methods   = ["GET", "HEAD"]
     target_origin_id = "APIGateway-Backend"
 
-    cache_policy_id          = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad" # CachingDisabled
-    origin_request_policy_id = "b689b0a8-53d0-40ab-baf2-68738e2966ac" # AllViewerExceptHostHeader
+    cache_policy_id            = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad" # CachingDisabled
+    origin_request_policy_id   = "b689b0a8-53d0-40ab-baf2-68738e2966ac" # AllViewerExceptHostHeader
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.security_headers.id
 
     viewer_protocol_policy = "redirect-to-https"
   }
@@ -650,11 +700,11 @@ resource "aws_lambda_permission" "allow_cloudwatch_keep_warm" {
 # ==========================================
 
 resource "aws_budgets_budget" "monthly_budget" {
-  name              = "sophielamour-monthly-budget-${local.env}"
-  budget_type       = "COST"
-  limit_amount      = "5"
-  limit_unit        = "USD"
-  time_unit         = "MONTHLY"
+  name         = "sophielamour-monthly-budget-${local.env}"
+  budget_type  = "COST"
+  limit_amount = "5"
+  limit_unit   = "USD"
+  time_unit    = "MONTHLY"
 
   notification {
     comparison_operator        = "GREATER_THAN"

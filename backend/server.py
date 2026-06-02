@@ -5,12 +5,13 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
 from fastapi import FastAPI, APIRouter, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from starlette.middleware.cors import CORSMiddleware
 from datetime import datetime, timezone
 import os
 import logging
 import base64
+import html
 import urllib.parse
 
 from routes import db
@@ -33,6 +34,31 @@ api_router.include_router(testimonials_router)
 api_router.include_router(contact_router)
 api_router.include_router(uploads_router)
 
+@api_router.get("/health")
+async def health_check():
+    return {
+        "status": "ok",
+        "service": "sophie-lamour-api",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "environment": os.environ.get("ENVIRONMENT", os.environ.get("ENV", "development")),
+        "database": "mock" if os.environ.get("MOCK_DB") == "true" else "dynamodb",
+    }
+
+@api_router.get("/ready")
+async def readiness_check():
+    required_env = ["JWT_SECRET", "FRONTEND_URL"]
+    missing_env = [name for name in required_env if not os.environ.get(name)]
+    status_code = 200 if not missing_env else 503
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "ready": not missing_env,
+            "status": "ready" if not missing_env else "not_ready",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "missing": missing_env,
+        },
+    )
+
 app.include_router(api_router)
 
 frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3000")
@@ -45,6 +71,43 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+def first_public_frontend_url() -> str:
+    frontend_url = os.environ.get("FRONTEND_URL", "")
+    for candidate in frontend_url.split(","):
+        candidate = candidate.strip().rstrip("/")
+        if candidate and "localhost" not in candidate:
+            return candidate
+    return ""
+
+def get_public_origin(request: Request) -> str:
+    explicit_url = os.environ.get("PUBLIC_SITE_URL") or os.environ.get("SITE_URL")
+    if explicit_url:
+        return explicit_url.rstrip("/")
+
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host", "")
+    if host and "execute-api" not in host:
+        scheme = request.headers.get("x-forwarded-proto", "https")
+        if "localhost" in host or host.startswith("127.0.0.1"):
+            scheme = "http"
+        return f"{scheme}://{host}".rstrip("/")
+
+    frontend_origin = first_public_frontend_url()
+    if frontend_origin:
+        return frontend_origin
+
+    if os.environ.get("ENVIRONMENT", "prod") == "prod":
+        return "https://www.sophielamourcoaching.fr"
+    return "https://d3ltn3xymy1clc.cloudfront.net"
+
+def absolutize_url(url: str, origin: str) -> str:
+    if not url:
+        return ""
+    if url.startswith("http://") or url.startswith("https://"):
+        return url
+    if url.startswith("/"):
+        return f"{origin}{urllib.parse.quote(url, safe='/:%?=&')}"
+    return f"{origin}/{urllib.parse.quote(url, safe='/:%?=&')}"
 
 @app.on_event("startup")
 async def startup_event():
@@ -127,9 +190,10 @@ async def serve_blog_post_preview(slug: str, request: Request):
         if "en" in accept_lang.lower() and "fr" not in accept_lang.lower():
             lang = "en"
 
-    # Get title and excerpt based on language
-    title = post.get("title_fr") if lang == "fr" else post.get("title_en")
-    excerpt = post.get("excerpt_fr") if lang == "fr" else post.get("excerpt_en")
+    # Get title and excerpt based on language. Facebook-specific fields let
+    # admins tune the link preview without changing the article itself.
+    title = post.get("facebook_title") or (post.get("title_fr") if lang == "fr" else post.get("title_en"))
+    excerpt = post.get("facebook_description") or (post.get("excerpt_fr") if lang == "fr" else post.get("excerpt_en"))
     
     # Fallbacks if a language field is missing
     if not title:
@@ -141,37 +205,20 @@ async def serve_blog_post_preview(slug: str, request: Request):
     clean_excerpt = re.sub(r'<[^>]+>', '', excerpt)
 
     # 4. Construct metadata
-    # Try x-forwarded-host first to support custom domain routing via CloudFront
-    host = request.headers.get("x-forwarded-host") or request.headers.get("host", "")
-    if "execute-api" in host or not host:
-        # Fallback to the environment-specific domain if we are bypass routing/accessing Lambda direct
-        env = os.environ.get("ENVIRONMENT", "prod")
-        if env == "prod":
-            host = "www.sophielamourcoaching.com"
-        else:
-            host = "d3ltn3xymy1clc.cloudfront.net"
-            
-    scheme = "https" if "localhost" not in host else "http"
+    origin = get_public_origin(request)
+    host = urllib.parse.urlparse(origin).netloc
     
     # Percent-encode slug to ensure RFC-compliant ASCII URL for crawlers
     encoded_slug = urllib.parse.quote(clean_slug)
-    post_url = f"{scheme}://{host}/blog/{encoded_slug}"
+    post_url = f"{origin}/blog/{encoded_slug}"
     
-    featured_image = post.get("featured_image") or ""
+    featured_image = post.get("facebook_image") or post.get("featured_image") or ""
     image_type = "image/jpeg" # safe default
     featured_image_url = ""
     
     if featured_image:
-        if not (featured_image.startswith("http://") or featured_image.startswith("https://")):
-            # Convert relative image path to absolute URL and percent-encode safe characters
-            encoded_image_path = urllib.parse.quote(featured_image, safe='/&=?%')
-            if featured_image.startswith("/"):
-                featured_image_url = f"{scheme}://{host}{encoded_image_path}"
-            else:
-                featured_image_url = f"{scheme}://{host}/{encoded_image_path}"
-        else:
-            featured_image_url = featured_image
-            
+        featured_image_url = absolutize_url(featured_image, origin)
+
         # Determine MIME type if it's an uploaded file
         if "/api/uploads/" in featured_image:
             try:
@@ -183,33 +230,45 @@ async def serve_blog_post_preview(slug: str, request: Request):
             except Exception as e:
                 logger.warning(f"Error resolving upload content type: {e}")
                 
-    og_image_tag = f'<meta property="og:image" content="{featured_image_url}"/>\n<meta property="og:image:type" content="{image_type}"/>' if featured_image else ''
-    twitter_image_tag = f'<meta name="twitter:image" content="{featured_image_url}"/>' if featured_image else ''
+    meta_title = html.escape(title, quote=True)
+    meta_excerpt = html.escape(clean_excerpt, quote=True)
+    meta_post_url = html.escape(post_url, quote=True)
+    meta_site_name = html.escape(host.upper(), quote=True)
+    meta_image_url = html.escape(featured_image_url, quote=True)
+
+    og_image_tag = f'''<meta property="og:image" content="{meta_image_url}"/>
+<meta property="og:image:secure_url" content="{meta_image_url}"/>
+<meta property="og:image:type" content="{html.escape(image_type, quote=True)}"/>
+<meta property="og:image:width" content="1200"/>
+<meta property="og:image:height" content="630"/>''' if featured_image else ''
+    twitter_image_tag = f'<meta name="twitter:image" content="{meta_image_url}"/>' if featured_image else ''
 
     # 5. Perform replacements in html_content
     # Replace title
     default_title = "<title>Sophie Lamour | Coach de vie et développement personnel</title>"
     if default_title in html_content:
-        html_content = html_content.replace(default_title, f"<title>{title} - Sophie Lamour</title>")
+        html_content = html_content.replace(default_title, f"<title>{meta_title} - Sophie Lamour</title>")
     else:
-        html_content = re.sub(r"<title>.*?</title>", f"<title>{title} - Sophie Lamour</title>", html_content)
+        html_content = re.sub(r"<title>.*?</title>", f"<title>{meta_title} - Sophie Lamour</title>", html_content)
 
     # Replace meta description
     default_desc = '<meta name="description" content="Sophie Lamour - Coach de vie et développement personnel. Accompagnement personnalisé en coaching professionnel, parentalité, home organising et ikigaï."/>'
     if default_desc in html_content:
-        html_content = html_content.replace(default_desc, f'<meta name="description" content="{clean_excerpt}"/>')
+        html_content = html_content.replace(default_desc, f'<meta name="description" content="{meta_excerpt}"/>')
     else:
-        html_content = re.sub(r'<meta name="description" content=".*?"/?>', f'<meta name="description" content="{clean_excerpt}"/>', html_content)
+        html_content = re.sub(r'<meta name="description" content=".*?"/?>', f'<meta name="description" content="{meta_excerpt}"/>', html_content)
 
     # Inject Open Graph and Twitter card tags
-    og_tags = f"""<meta property="og:title" content="{title}"/>
-<meta property="og:description" content="{clean_excerpt}"/>
+    og_tags = f"""<link rel="canonical" href="{meta_post_url}"/>
+<meta property="og:title" content="{meta_title}"/>
+<meta property="og:description" content="{meta_excerpt}"/>
 {og_image_tag}
-<meta property="og:url" content="{post_url}"/>
+<meta property="og:url" content="{meta_post_url}"/>
 <meta property="og:type" content="article"/>
+<meta property="og:site_name" content="{meta_site_name}"/>
 <meta name="twitter:card" content="summary_large_image"/>
-<meta name="twitter:title" content="{title}"/>
-<meta name="twitter:description" content="{clean_excerpt}"/>
+<meta name="twitter:title" content="{meta_title}"/>
+<meta name="twitter:description" content="{meta_excerpt}"/>
 {twitter_image_tag}
 </head>"""
 
@@ -218,5 +277,11 @@ async def serve_blog_post_preview(slug: str, request: Request):
     return HTMLResponse(content=html_content)
 
 from mangum import Mangum
-handler = Mangum(app)
+asgi_handler = Mangum(app)
+
+def handler(event, context):
+    if isinstance(event, dict) and event.get("source") == "aws.events":
+        logger.info("Received Lambda keep-warm event")
+        return {"statusCode": 204, "body": ""}
+    return asgi_handler(event, context)
 

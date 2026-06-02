@@ -11,6 +11,10 @@ router = APIRouter(prefix="/auth")
 
 JWT_ALGORITHM = "HS256"
 
+def is_production_environment() -> bool:
+    env = os.environ.get("ENV", os.environ.get("ENVIRONMENT", "development")).lower()
+    return env in {"prod", "production"}
+
 def get_jwt_secret() -> str:
     return os.environ["JWT_SECRET"]
 
@@ -72,7 +76,7 @@ async def login(credentials: LoginRequest, response: Response):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     access_token = create_access_token(str(user["_id"]), user["email"])
     refresh_token = create_refresh_token(str(user["_id"]))
-    is_prod = os.environ.get("ENV") == "production"
+    is_prod = is_production_environment()
     response.set_cookie(key="access_token", value=access_token, httponly=True, secure=is_prod, samesite="lax" if not is_prod else "strict", max_age=86400, path="/")
     response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, secure=is_prod, samesite="lax" if not is_prod else "strict", max_age=604800, path="/")
     return {"id": str(user["_id"]), "email": user["email"], "name": user["name"], "role": user["role"]}

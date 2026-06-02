@@ -2,12 +2,47 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
 import axios from 'axios';
-import { ArrowLeft, Upload, X, Image as ImageIcon, Loader2, FileText, Code, Sparkles } from 'lucide-react';
+import { ArrowLeft, X, Image as ImageIcon, Loader2, FileText, Code, Sparkles, Share2, RefreshCw } from 'lucide-react';
 import 'react-quill-new/dist/quill.snow.css';
 import { marked } from 'marked';
 import { toast } from 'sonner';
 
 const API_URL = process.env.REACT_APP_BACKEND_URL || '';
+const PREVIEW_DOMAIN = 'SOPHIELAMOURCOACHING.FR';
+const DEFAULT_FACEBOOK_HASHTAGS = '#SophieLamourCoaching #Coaching #BienEtre';
+const CATEGORY_HASHTAGS = {
+  'Organisation': '#HomeOrganising #RangementConscient #BienEtre',
+  'Bien-\u00eatre': '#BienEtre #DeveloppementPersonnel',
+  'Coaching': '#Coaching #SophieLamourCoaching',
+  'Parentalit\u00e9': '#Parentalite #Famille #Coaching',
+  'D\u00e9veloppement personnel': '#DeveloppementPersonnel #Coaching'
+};
+
+const stripHtml = (value = '') =>
+  value.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+
+const compactText = (value = '', maxLength = 220) => {
+  const clean = stripHtml(value);
+  return clean.length > maxLength ? `${clean.slice(0, maxLength - 1).trim()}...` : clean;
+};
+
+const getFacebookHashtags = (data) =>
+  data.facebook_hashtags?.trim() || CATEGORY_HASHTAGS[data.category] || DEFAULT_FACEBOOK_HASHTAGS;
+
+const buildFacebookPostText = (data) => {
+  const intro = compactText(data.excerpt_fr || data.title_fr, 220);
+  const hashtags = getFacebookHashtags(data);
+  return [intro, hashtags].filter(Boolean).join('\n\n');
+};
+
+const withFacebookDefaults = (data) => ({
+  ...data,
+  facebook_post_text: data.facebook_post_text?.trim() ? data.facebook_post_text : buildFacebookPostText(data),
+  facebook_title: data.facebook_title?.trim() ? data.facebook_title : data.title_fr,
+  facebook_description: data.facebook_description?.trim() ? data.facebook_description : compactText(data.excerpt_fr, 220),
+  facebook_image: data.facebook_image?.trim() ? data.facebook_image : data.featured_image,
+  facebook_hashtags: data.facebook_hashtags?.trim() ? data.facebook_hashtags : getFacebookHashtags(data)
+});
 
 const uploadFile = async (file) => {
   const formData = new FormData();
@@ -242,7 +277,12 @@ const BlogEditor = () => {
     featured_image: '',
     category: 'Développement personnel',
     status: 'draft',
-    share_to_social: false
+    share_to_social: false,
+    facebook_post_text: '',
+    facebook_title: '',
+    facebook_description: '',
+    facebook_image: '',
+    facebook_hashtags: ''
   });
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
@@ -306,7 +346,12 @@ const BlogEditor = () => {
         featured_image: data.featured_image || '',
         category: data.category || 'Développement personnel',
         status: data.status || 'draft',
-        share_to_social: false
+        share_to_social: false,
+        facebook_post_text: data.facebook_post_text || '',
+        facebook_title: data.facebook_title || '',
+        facebook_description: data.facebook_description || '',
+        facebook_image: data.facebook_image || '',
+        facebook_hashtags: data.facebook_hashtags || ''
       });
     } catch (err) {
       setError("Erreur lors du chargement de l'article");
@@ -317,6 +362,21 @@ const BlogEditor = () => {
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleFacebookToggle = (checked) => {
+    setFormData(prev => checked ? withFacebookDefaults({ ...prev, share_to_social: true }) : { ...prev, share_to_social: false });
+  };
+
+  const regenerateFacebookPost = () => {
+    setFormData(prev => withFacebookDefaults({
+      ...prev,
+      facebook_post_text: '',
+      facebook_title: '',
+      facebook_description: '',
+      facebook_image: '',
+      facebook_hashtags: ''
+    }));
   };
 
   const handleSubmit = async (e) => {
@@ -339,6 +399,9 @@ const BlogEditor = () => {
       setLoading(false);
     }
   };
+
+  const facebookPreview = withFacebookDefaults(formData);
+  const showFacebookPanel = !isEditing && formData.share_to_social;
 
   if (fetching) {
     return (
@@ -566,7 +629,11 @@ const BlogEditor = () => {
                   </label>
                   <FeaturedImageUpload
                     value={formData.featured_image}
-                    onChange={(url) => setFormData(prev => ({ ...prev, featured_image: url }))}
+                    onChange={(url) => setFormData(prev => ({
+                      ...prev,
+                      featured_image: url,
+                      facebook_image: prev.facebook_image || url
+                    }))}
                   />
                 </div>
                 <div>
@@ -606,20 +673,139 @@ const BlogEditor = () => {
               </div>
 
               {!isEditing && (
-                <div className="flex items-center gap-3 p-4 bg-gradient-to-r from-[#E0F2FE] to-[#CCFBF1] rounded-xl border border-[#48CAE4]">
-                  <input
-                    type="checkbox"
-                    id="share_to_social"
-                    name="share_to_social"
-                    checked={formData.share_to_social}
-                    onChange={(e) => setFormData({...formData, share_to_social: e.target.checked})}
-                    data-testid="share-social-checkbox"
-                    className="w-5 h-5 rounded border-[#48CAE4] text-[#0077B6] focus:ring-[#0077B6]"
-                  />
-                  <label htmlFor="share_to_social" className="text-sm font-medium text-[#03045E] cursor-pointer flex-1">
-                    Partager sur les reseaux sociaux
-                  </label>
-                </div>
+                <section className="space-y-5 rounded-xl border border-[#48CAE4] bg-gradient-to-r from-[#E0F2FE] to-[#CCFBF1] p-5" data-testid="facebook-share-panel">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <label htmlFor="share_to_social" className="flex cursor-pointer items-center gap-3 text-sm font-semibold text-[#03045E]">
+                      <input
+                        type="checkbox"
+                        id="share_to_social"
+                        name="share_to_social"
+                        checked={formData.share_to_social}
+                        onChange={(e) => handleFacebookToggle(e.target.checked)}
+                        data-testid="share-social-checkbox"
+                        className="h-5 w-5 rounded border-[#48CAE4] text-[#0077B6] focus:ring-[#0077B6]"
+                      />
+                      <span className="flex items-center gap-2">
+                        <Share2 size={16} />
+                        Preparer une publication Facebook enrichie
+                      </span>
+                    </label>
+                    {showFacebookPanel && (
+                      <button
+                        type="button"
+                        onClick={regenerateFacebookPost}
+                        className="inline-flex items-center justify-center gap-2 rounded-full border border-[#48CAE4] bg-white px-4 py-2 text-sm font-semibold text-[#0077B6] transition-colors hover:bg-[#CAF0F8]"
+                        data-testid="facebook-regenerate-btn"
+                      >
+                        <RefreshCw size={14} />
+                        Regenerer
+                      </button>
+                    )}
+                  </div>
+
+                  {showFacebookPanel && (
+                    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_420px]">
+                      <div className="space-y-4">
+                        <div>
+                          <label className="mb-2 block text-sm font-medium text-[#03045E]">
+                            Texte du post Facebook
+                          </label>
+                          <textarea
+                            name="facebook_post_text"
+                            value={formData.facebook_post_text}
+                            onChange={handleChange}
+                            rows={5}
+                            data-testid="facebook-post-text-input"
+                            placeholder="Texte qui apparaitra au-dessus du lien"
+                            className="w-full resize-none rounded-xl border border-[#ADE8F4] px-4 py-3 text-[#03045E] transition-colors focus:border-[#0077B6] focus:outline-none"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                          <div>
+                            <label className="mb-2 block text-sm font-medium text-[#03045E]">
+                              Titre de la carte
+                            </label>
+                            <input
+                              type="text"
+                              name="facebook_title"
+                              value={formData.facebook_title}
+                              onChange={handleChange}
+                              data-testid="facebook-title-input"
+                              placeholder={formData.title_fr}
+                              className="w-full rounded-xl border border-[#ADE8F4] px-4 py-3 transition-colors focus:border-[#0077B6] focus:outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="mb-2 block text-sm font-medium text-[#03045E]">
+                              Hashtags
+                            </label>
+                            <input
+                              type="text"
+                              name="facebook_hashtags"
+                              value={formData.facebook_hashtags}
+                              onChange={handleChange}
+                              data-testid="facebook-hashtags-input"
+                              placeholder={CATEGORY_HASHTAGS[formData.category] || DEFAULT_FACEBOOK_HASHTAGS}
+                              className="w-full rounded-xl border border-[#ADE8F4] px-4 py-3 transition-colors focus:border-[#0077B6] focus:outline-none"
+                            />
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="mb-2 block text-sm font-medium text-[#03045E]">
+                            Description de la carte
+                          </label>
+                          <textarea
+                            name="facebook_description"
+                            value={formData.facebook_description}
+                            onChange={handleChange}
+                            rows={3}
+                            data-testid="facebook-description-input"
+                            placeholder={compactText(formData.excerpt_fr)}
+                            className="w-full resize-none rounded-xl border border-[#ADE8F4] px-4 py-3 transition-colors focus:border-[#0077B6] focus:outline-none"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="mb-2 block text-sm font-medium text-[#03045E]">
+                            Image de la carte
+                          </label>
+                          <input
+                            type="text"
+                            name="facebook_image"
+                            value={formData.facebook_image}
+                            onChange={handleChange}
+                            data-testid="facebook-image-input"
+                            placeholder={formData.featured_image || "/api/uploads/..."}
+                            className="w-full rounded-xl border border-[#ADE8F4] px-4 py-3 transition-colors focus:border-[#0077B6] focus:outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="overflow-hidden rounded-xl border border-[#D0D7DE] bg-white shadow-sm" data-testid="facebook-preview-card">
+                        {facebookPreview.facebook_image && (
+                          <div className="aspect-[1.91/1] w-full overflow-hidden bg-[#CAF0F8]">
+                            <img
+                              src={facebookPreview.facebook_image}
+                              alt=""
+                              className="h-full w-full object-cover"
+                            />
+                          </div>
+                        )}
+                        <div className="border-t border-[#D0D7DE] bg-[#F0F2F5] p-4">
+                          <p className="mb-1 text-xs uppercase tracking-normal text-[#65676B]">{PREVIEW_DOMAIN}</p>
+                          <h3 className="line-clamp-2 text-lg font-bold leading-tight text-[#050505]">
+                            {facebookPreview.facebook_title || formData.title_fr || "Titre de l'article"}
+                          </h3>
+                          <p className="mt-2 line-clamp-3 text-sm leading-snug text-[#050505]">
+                            {facebookPreview.facebook_description || compactText(formData.excerpt_fr) || "Description de l'article"}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </section>
               )}
 
               {error && (
