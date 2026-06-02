@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 import os
 import logging
 import base64
+import urllib.parse
 
 from routes import db
 from routes.auth import router as auth_router, hash_password, verify_password
@@ -151,18 +152,39 @@ async def serve_blog_post_preview(slug: str, request: Request):
             host = "d3ltn3xymy1clc.cloudfront.net"
             
     scheme = "https" if "localhost" not in host else "http"
-    post_url = f"{scheme}://{host}/blog/{clean_slug}"
+    
+    # Percent-encode slug to ensure RFC-compliant ASCII URL for crawlers
+    encoded_slug = urllib.parse.quote(clean_slug)
+    post_url = f"{scheme}://{host}/blog/{encoded_slug}"
     
     featured_image = post.get("featured_image") or ""
-    if featured_image and not (featured_image.startswith("http://") or featured_image.startswith("https://")):
-        # Convert relative image path to absolute URL
-        if featured_image.startswith("/"):
-            featured_image = f"{scheme}://{host}{featured_image}"
+    image_type = "image/jpeg" # safe default
+    featured_image_url = ""
+    
+    if featured_image:
+        if not (featured_image.startswith("http://") or featured_image.startswith("https://")):
+            # Convert relative image path to absolute URL and percent-encode safe characters
+            encoded_image_path = urllib.parse.quote(featured_image, safe='/&=?%')
+            if featured_image.startswith("/"):
+                featured_image_url = f"{scheme}://{host}{encoded_image_path}"
+            else:
+                featured_image_url = f"{scheme}://{host}/{encoded_image_path}"
         else:
-            featured_image = f"{scheme}://{host}/{featured_image}"
+            featured_image_url = featured_image
             
-    og_image_tag = f'<meta property="og:image" content="{featured_image}"/>' if featured_image else ''
-    twitter_image_tag = f'<meta name="twitter:image" content="{featured_image}"/>' if featured_image else ''
+        # Determine MIME type if it's an uploaded file
+        if "/api/uploads/" in featured_image:
+            try:
+                # Extract file_id from URL path
+                file_id = featured_image.split("/api/uploads/")[-1].split("?")[0].split("/")[0]
+                upload_item = await db.uploads.find_one({"file_id": file_id})
+                if upload_item and upload_item.get("content_type"):
+                    image_type = upload_item["content_type"]
+            except Exception as e:
+                logger.warning(f"Error resolving upload content type: {e}")
+                
+    og_image_tag = f'<meta property="og:image" content="{featured_image_url}"/>\n<meta property="og:image:type" content="{image_type}"/>' if featured_image else ''
+    twitter_image_tag = f'<meta name="twitter:image" content="{featured_image_url}"/>' if featured_image else ''
 
     # 5. Perform replacements in html_content
     # Replace title
